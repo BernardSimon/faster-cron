@@ -7,10 +7,10 @@ from typing import List, Dict, Any, Callable
 from .base import CronBase
 
 
-class FastCron:
+class FasterCron:
     def __init__(self, log_level=logging.INFO):
         self.tasks: List[Dict[str, Any]] = []
-        self.logger = logging.getLogger("FastCron.Sync")
+        self.logger = logging.getLogger("FasterCron.Sync")
         self.logger.setLevel(log_level)
         self._running = False
         self._monitors: List[threading.Thread] = []
@@ -36,7 +36,7 @@ class FastCron:
     def run(self):
         """阻塞启动所有任务监控器"""
         self._running = True
-        self.logger.info(f"FastCron (Sync Mode) started with {len(self.tasks)} tasks.")
+        self.logger.info(f"FasterCron (Sync Mode) started with {len(self.tasks)} tasks.")
 
         for task in self.tasks:
             t = threading.Thread(
@@ -52,7 +52,7 @@ class FastCron:
             while self._running:
                 time.sleep(1)
         except KeyboardInterrupt:
-            self.logger.info("FastCron stopping...")
+            self.logger.info("FasterCron stopping...")
             self._running = False
 
     def _monitor_loop(self, task: Dict[str, Any]):

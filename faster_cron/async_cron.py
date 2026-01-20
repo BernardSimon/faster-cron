@@ -6,10 +6,10 @@ from typing import Callable, Optional
 from .base import CronBase
 
 
-class AsyncFastCron:
+class AsyncFasterCron:
     def __init__(self, log_level=logging.INFO):
         self.tasks = []
-        self.logger = logging.getLogger("FastCron.Async")
+        self.logger = logging.getLogger("FasterCron.Async")
         self.logger.setLevel(log_level)
         self._running = False
 

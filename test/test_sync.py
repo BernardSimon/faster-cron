@@ -1,7 +1,7 @@
 import time
 import threading
 import pytest
-from fast_cron.sync_cron import FastCron
+from faster_cron.sync_cron import FastCron
 
 
 def test_sync_overlap_prevention():

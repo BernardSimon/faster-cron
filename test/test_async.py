@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 from datetime import datetime
-from fast_cron.async_cron import AsyncFastCron
+from faster_cron.async_cron import AsyncFastCron
 
 @pytest.mark.asyncio
 async def test_async_overlap_prevention():
