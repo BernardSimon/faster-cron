@@ -1,7 +1,6 @@
 import asyncio
 import pytest
-from datetime import datetime
-from faster_cron.async_cron import AsyncFastCron
+from faster_cron import AsyncFasterCron
 
 @pytest.mark.asyncio
 async def test_async_overlap_prevention():
@@ -10,7 +9,7 @@ async def test_async_overlap_prevention():
     注册一个每秒触发一次的任务，但任务耗时 1.5 秒且 allow_overlap=False。
     在运行 3 秒的时间内，该任务应该只执行 2 次（第 1 秒触发，第 2 秒因为第 1 秒的没跑完被跳过）。
     """
-    cron = AsyncFastCron()
+    cron = AsyncFasterCron()
     execution_counter = 0
 
     @cron.schedule("* * * * * *", allow_overlap=False)
@@ -32,7 +31,7 @@ async def test_async_overlap_prevention():
 @pytest.mark.asyncio
 async def test_async_context_injection():
     """测试上下文参数是否能正确注入"""
-    cron = AsyncFastCron()
+    cron = AsyncFasterCron()
     received_context = None
 
     @cron.schedule("* * * * * *")

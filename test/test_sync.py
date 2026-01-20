@@ -1,7 +1,6 @@
 import time
 import threading
-import pytest
-from faster_cron.sync_cron import FastCron
+from faster_cron.sync_cron import FasterCron
 
 
 def test_sync_overlap_prevention():
@@ -9,7 +8,7 @@ def test_sync_overlap_prevention():
     测试同步模式下的重叠控制：
     任务耗时 1.2 秒，触发间隔 1 秒，禁止重叠。
     """
-    cron = FastCron()
+    cron = FasterCron()
     execution_counter = 0
     lock = threading.Lock()
 
@@ -38,7 +37,7 @@ def test_sync_no_overlap_allowed():
     测试同步模式下的并发：
     允许重叠时，即使任务慢，触发点到了也应该立即启动新线程。
     """
-    cron = FastCron()
+    cron = FasterCron()
     execution_counter = 0
     lock = threading.Lock()
 
