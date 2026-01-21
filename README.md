@@ -1,5 +1,7 @@
 # FasterCron
 
+[English](./README_EN.md) | 中文版
+
 **FasterCron** 是一个轻量级、直观且功能强大的 Python 定时任务调度工具库。它完美支持 **Asyncio (异步)** 和 **Threading (多线程)** 双模式，专为需要高可靠性、简单配置和任务并发控制的场景设计。
 
 ---
