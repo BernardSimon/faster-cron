@@ -141,20 +141,49 @@ async def flaky_task(ctx):
     do_work()
 ```
 
-### 4. 一次性任务 ⭐⭐⭐
+### 4. 一次性任务 ⭐⭐⭐⭐
 
-无需注册，立即调度延迟或定时执行的任务。
+无需注册，立即调度延迟或定时执行的任务。支持**同步**和**异步**双模式。
 
 ```python
 from datetime import datetime, timedelta
+from faster_cron import OneShotScheduler, AsyncOneShotScheduler
+
+# === 同步模式 ===
+cron_sync = OneShotScheduler()
 
 # 延迟 N 秒后执行一次
-cron.once_in(300, send_email)  # 5 分钟后
+cron_sync.once_in(300, send_email)  # 5 分钟后发送邮件
 
 # 指定时间执行一次
 target_time = datetime.now() + timedelta(hours=1)
-cron.run_at(target_time, generate_report)
+cron_sync.run_at(target_time, generate_report)
+
+
+# === 异步模式 ===
+cron_async = AsyncOneShotScheduler()
+
+# 使用 await!
+await cron_async.once_in(300, send_async_email)  # 5 分钟后
+await cron_async.run_at(target_time, generate_async_report)
+
+
+# === 错误处理与重试 ===
+def my_task():
+    do_work()
+
+record = cron_sync.once_in(60, my_task)
+print(f"任务计划时间：{record.scheduled_at}")
+print(f"是否成功：{record.success}")
+
+# 设置自定义错误回调
+def error_handler(error, record):
+    print(f"⚠️ 任务失败：{error}")
+
+scheduler = OneShotScheduler(on_error=error_handler, max_retries=3)
 ```
+
+完整示例：[demo/v2_demo_one_shot.py](./demo/v2_demo_one_shot.py)
 
 ### 5. 灵活日志配置 ⭐⭐⭐
 
