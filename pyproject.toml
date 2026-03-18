@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "faster-cron"
-version = "2.1.0"
+version = "2.2.0"
 authors = [
   { name="Bernard Simon", email="bernardziyi@gmail.com" },
 ]
@@ -31,7 +31,8 @@ dependencies = []
 
 [project.optional-dependencies]
 yaml = ["pyyaml"]
-dev = ["pytest", "pytest-asyncio", "black", "isort", "mypy"]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest", "pytest-asyncio", "black", "isort", "mypy", "httpx"]
 
 [project.urls]
 "Homepage" = "https://github.com/BernardSimon/faster-cron"

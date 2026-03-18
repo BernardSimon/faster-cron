@@ -38,6 +38,12 @@ Optional dependency (YAML config loading):
 pip install pyyaml
 ```
 
+Optional dependency (Web admin UI):
+
+```bash
+pip install "faster-cron[web]"
+```
+
 Development/test setup:
 
 ```bash
@@ -104,6 +110,7 @@ Manage tasks while the scheduler is running:
 - `pause_task()` / `resume_task()`
 - `disable_task()` / `enable_task()`
 - `list_tasks()` / `get_task()`
+- `enable_web()` / `disable_web()` (also `enableWeb()` / `disableWeb()` aliases)
 
 ```python
 cron = AsyncFasterCron()
@@ -116,8 +123,25 @@ async def dynamic_task(ctx):
     pass
 
 cron.add_task("*/10 * * * * *", dynamic_task, allow_overlap=False)
+cron.update_task("dynamic_task", expression="*/15 * * * * *", kwargs={"env": "prod"})
 print([task.name for task in cron.list_tasks()])
 ```
+
+### 7. Optional web admin UI (FastAPI + Tailwind)
+
+Enable `enable_web_ui=True` in constructor to launch a lightweight web page for task CRUD, pause/resume, parameter inspection/editing, and execution history.
+
+```python
+from faster_cron import FasterCron
+
+cron = FasterCron(
+    enable_web_ui=True,
+    web_host="127.0.0.1",   # optional, default 127.0.0.1
+    web_port=8000,           # optional, default 8000
+)
+```
+
+After starting the scheduler, open: `http://127.0.0.1:8000`
 
 ### 2. Retry + error callback
 
@@ -226,6 +250,9 @@ Shared by `AsyncFasterCron` and `FasterCron`:
 - `max_retries`
 - `retry_delay`
 - `on_error`
+- `enable_web_ui`
+- `web_host`
+- `web_port`
 
 `FasterCron` also supports:
 - `wait_on_exit`
@@ -259,6 +286,15 @@ info = cron.add_task(
     expression="*/5 * * * * *",
     func=my_task,
     allow_overlap=False,
+    args=(1, "x"),
+    kwargs={"env": "dev"},
+)
+
+cron.update_task(
+    task_name="my_task",
+    expression="*/10 * * * * *",
+    args=(2,),
+    kwargs={"env": "prod"},
 )
 ```
 
@@ -272,6 +308,10 @@ class TaskInfo:
     func: Callable
     allow_overlap: bool
     state: TaskState
+    task_args: tuple = ()
+    task_kwargs: Dict[str, Any] = field(default_factory=dict)
+    func_module: Optional[str] = None
+    func_qualname: Optional[str] = None
     retry_count: int = 0
     last_execution: Optional[datetime] = None
     last_result: Optional[str] = None
@@ -320,7 +360,14 @@ python3 demo/v2_demo_config.py
 python3 demo/v2_demo_run.py
 python3 demo/v2_demo_one_shot.py
 python3 demo/v2_demo_management.py
+python3 demo/v2_demo_web.py
+python3 demo/v2_demo_web_async.py
 ```
+
+`v2_demo_web.py` and `v2_demo_web_async.py` preload three task types:
+- normal success task
+- slow task (`allow_overlap=False`)
+- intermittent failure task (to populate error history)
 
 ---
 
@@ -351,6 +398,7 @@ faster_cron/
   __init__.py
   async_cron.py
   sync_cron.py
+  web_admin.py
   base.py
   models.py
   example_tasks.py
@@ -362,6 +410,8 @@ demo/
   v2_demo_run.py
   v2_demo_one_shot.py
   v2_demo_management.py
+  v2_demo_web.py
+  v2_demo_web_async.py
 
 test/
   test_cron_logic.py

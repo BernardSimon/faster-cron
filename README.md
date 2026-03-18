@@ -38,6 +38,12 @@ pip install faster-cron
 pip install pyyaml
 ```
 
+可选依赖（Web 管理后台）：
+
+```bash
+pip install "faster-cron[web]"
+```
+
 开发/测试环境：
 
 ```bash
@@ -104,6 +110,7 @@ if __name__ == "__main__":
 - `pause_task()` / `resume_task()`
 - `disable_task()` / `enable_task()`
 - `list_tasks()` / `get_task()`
+- `enable_web()` / `disable_web()`（也支持 `enableWeb()` / `disableWeb()`）
 
 ```python
 cron = AsyncFasterCron()
@@ -116,8 +123,25 @@ async def dynamic_task(ctx):
     pass
 
 cron.add_task("*/10 * * * * *", dynamic_task, allow_overlap=False)
+cron.update_task("dynamic_task", expression="*/15 * * * * *", kwargs={"env": "prod"})
 print([task.name for task in cron.list_tasks()])
 ```
+
+### 7. 可选 Web 管理后台（FastAPI + Tailwind）
+
+实例化时开启 `enable_web_ui=True` 即可启用在线管理页面，支持任务增删改、暂停/恢复、参数查看和执行记录查看。
+
+```python
+from faster_cron import FasterCron
+
+cron = FasterCron(
+    enable_web_ui=True,
+    web_host="127.0.0.1",   # 可选，默认 127.0.0.1
+    web_port=8000,           # 可选，默认 8000
+)
+```
+
+启动调度器后访问：`http://127.0.0.1:8000`
 
 ### 2. 重试机制与错误回调
 
@@ -226,6 +250,9 @@ tasks:
 - `max_retries`
 - `retry_delay`
 - `on_error`
+- `enable_web_ui`
+- `web_host`
+- `web_port`
 
 `FasterCron` 额外支持：
 - `wait_on_exit`
@@ -259,6 +286,15 @@ info = cron.add_task(
     expression="*/5 * * * * *",
     func=my_task,
     allow_overlap=False,
+    args=(1, "x"),
+    kwargs={"env": "dev"},
+)
+
+cron.update_task(
+    task_name="my_task",
+    expression="*/10 * * * * *",
+    args=(2,),
+    kwargs={"env": "prod"},
 )
 ```
 
@@ -272,6 +308,10 @@ class TaskInfo:
     func: Callable
     allow_overlap: bool
     state: TaskState
+    task_args: tuple = ()
+    task_kwargs: Dict[str, Any] = field(default_factory=dict)
+    func_module: Optional[str] = None
+    func_qualname: Optional[str] = None
     retry_count: int = 0
     last_execution: Optional[datetime] = None
     last_result: Optional[str] = None
@@ -320,7 +360,14 @@ python3 demo/v2_demo_config.py
 python3 demo/v2_demo_run.py
 python3 demo/v2_demo_one_shot.py
 python3 demo/v2_demo_management.py
+python3 demo/v2_demo_web.py
+python3 demo/v2_demo_web_async.py
 ```
+
+`v2_demo_web.py` 与 `v2_demo_web_async.py` 会预置三类任务：
+- 正常成功任务
+- 慢任务（禁用重叠）
+- 间歇失败任务（用于观察错误记录）
 
 ---
 
@@ -351,6 +398,7 @@ faster_cron/
   __init__.py
   async_cron.py
   sync_cron.py
+  web_admin.py
   base.py
   models.py
   example_tasks.py
@@ -362,6 +410,8 @@ demo/
   v2_demo_run.py
   v2_demo_one_shot.py
   v2_demo_management.py
+  v2_demo_web.py
+  v2_demo_web_async.py
 
 test/
   test_cron_logic.py

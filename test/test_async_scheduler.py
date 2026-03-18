@@ -85,6 +85,20 @@ async def test_async_context_injection_supports_positional_ctx_and_sync_callable
 
 
 @pytest.mark.asyncio
+async def test_async_context_injection_supports_named_context_with_extra_args(async_cron):
+    received = {}
+
+    async def with_args(context, message):
+        received["task"] = (context["task_name"], message)
+
+    async_cron.add_task("* * * * * *", with_args, args=("hello",))
+    context = {"scheduled_at": datetime.now(), "task_name": "manual"}
+    await async_cron._execute_task(async_cron.tasks[0], context, args=("hello",), kwargs={})
+
+    assert received["task"] == ("manual", "hello")
+
+
+@pytest.mark.asyncio
 async def test_async_non_overlap_blocks_parallel_runs(async_cron):
     starts: list[float] = []
 
