@@ -1,0 +1,37 @@
+# tasks.yaml - FasterCron 任务配置文件示例
+
+tasks:
+  # 1. 每日凌晨备份任务
+  - module: my_app.backup
+    function: nightly_backup
+    expression: "0 2 * * *"      # 每天凌晨 2 点
+    allow_overlap: false
+    priority: 5
+
+  # 2. 每小时清理临时文件
+  - module: my_app.cleanup
+    function: clean_temp_files
+    expression: "0 * * * *"      # 每小时一次
+    allow_overlap: true
+    priority: 3
+
+  # 3. 每周一生成周报
+  - module: my_app.reports
+    function: generate_weekly_report
+    expression: "0 9 * * 1"      # 周一上午 9 点
+    allow_overlap: false
+    priority: 4
+
+  # 4. 每分钟检查服务健康状态
+  - module: my_app.monitoring
+    function: health_check
+    expression: "* * * * *"      # 每分钟
+    allow_overlap: true
+    priority: 10
+
+  # 5. 每秒心跳检测（高频任务）
+  - module: my_app.health
+    function: heartbeat
+    expression: "*/1 * * * *"   # 每秒
+    allow_overlap: true
+    priority: 1
