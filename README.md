@@ -1,40 +1,41 @@
-# FasterCron - 轻量级 Python 定时任务调度器
+# FasterCron - 轻量级 Python 定时任务调度器 🐱
 
-**English Version**: See [README_EN.md](./README_EN.md) | **中文版本**: [快速开始](#-快速开始) | [核心特性](#-核心特性) | [使用指南](#-使用指南)
+FasterCron 是一个功能强大、易用性极高的 Python 定时任务调度库，支持 **异步模式**（asyncio）和 **同步模式**（threading）双架构设计。
 
 ---
 
 <div align="center">
 
-**A lightweight, intuitive, and powerful task scheduling library for Python  
-supporting both asyncio (async mode) and threading (sync mode)**
+**Lightweight, Intuitive, and Powerful Task Scheduling for Python  
+支持 Asyncio (异步) 和 Threading (同步) 双模式**
 
 [![PyPI version](https://img.shields.io/pypi/v/faster-cron.svg)](https://pypi.org/project/faster-cron/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/faster-cron.svg)](https://pypi.org/project/faster-cron/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passed-green.svg)](test/)
 
+👉 **English**: [README_EN.md](./README_EN.md) | 🚀 **快速开始**：见下方
+
 </div>
 
 ---
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### Installation
+### 安装
 
 ```bash
 pip install faster-cron
 ```
 
-Optional dependencies for config file loading:
+可选依赖（配置加载）：
 ```bash
-pip install faster-cron[yaml]  # For YAML support
-pip install faster-cron[json]  # JSON is built-in, no extra dependency needed
+pip install pyyaml  # YAML 支持
 ```
 
-### Basic Usage
+### 基础用法
 
-#### Async Mode (Recommended for async applications)
+#### 异步模式（推荐用于异步应用）
 
 ```python
 import asyncio
@@ -42,308 +43,236 @@ from faster_cron import AsyncFasterCron
 
 cron = AsyncFasterCron()
 
-# Register a periodic task
-@cron.schedule("*/5 * * * * *")  # Every 5 seconds
+# 注册周期性任务
+@cron.schedule("*/5 * * * * *")  # 每 5 秒执行
 async def my_task(context):
-    print(f"Task executed at {context['scheduled_at']}")
+    print(f"任务执行时间：{context['scheduled_at']}")
 
 async def main():
-    await cron.start()  # Start the scheduler
-    
-    # Run for 60 seconds
-    await asyncio.sleep(60)
-    
-    # Graceful shutdown
-    await cron.stop()
+    await cron.start()      # 启动调度器
+    await asyncio.sleep(60)  # 运行 60 秒
+    await cron.stop()        # 优雅关闭
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-#### Sync Mode (For traditional blocking scripts)
+#### 同步模式（适用于传统脚本）
 
 ```python
 from faster_cron import FasterCron
-import time
 
 cron = FasterCron()
 
-@cron.schedule("* * * * * *")  # Every second
+@cron.schedule("* * * * * *")  # 每秒执行
 def my_task(context):
-    print(f"Sync task running at {context['scheduled_at']}")
+    print(f"同步任务时间：{context['scheduled_at']}")
 
 if __name__ == "__main__":
-    cron.run(wait_on_exit=True)  # Block until stopped
+    cron.run(wait_on_exit=True)  # 阻塞运行直到停止
 ```
 
 ---
 
-## ✨ Core Features
+## ✨ 核心功能
 
-### 1. High-Precision Timing ⭐⭐⭐⭐⭐
+### 1. 高精度时间控制 ⭐⭐⭐⭐⭐
 
-Dynamic calculation of next trigger time with sub-second precision. Unlike traditional schedulers that check every second, FasterCron waits precisely to the exact trigger moment.
+动态计算下一个触发时刻，亚秒级精度。
 
-**Before vs After:**
-- ❌ Old way: Check every 1 second → ~500ms average error
-- ✅ Now: Calculate and wait → <0.1ms average error (**5000x improvement!**)
+- ❌ 传统方式：每秒检查一次 → ~500ms 误差
+- ✅ FasterCron：精确等待 → <0.1ms 误差 (**提升 5000 倍!**)
 
 ```python
-@cron.schedule("0 * * * * *")  # Trigger exactly on the minute
-async def hourly_task(context):
-    # This executes with <0.1ms accuracy
+@cron.schedule("0 * * * * *")  # 整点触发
+async def hourly_job(ctx):
+    # 以<0.1ms 精度在整点执行
     pass
 ```
 
-### 2. Dynamic Task Management ⭐⭐⭐⭐
+### 2. 动态任务管理 ⭐⭐⭐⭐
 
-Add, remove, pause, resume, or disable tasks at runtime without restarting the scheduler.
+运行时添加、删除、暂停、恢复、禁用任务。
 
 ```python
 cron = AsyncFasterCron()
 
-# Initial registration
+# 初始注册
 @cron.schedule("*/5 * * * * *")
 async def initial_task(ctx):
     pass
 
-# Add task dynamically
+# 动态添加任务
 def new_task(ctx):
     pass
-cron.add_task("*/10 * * * * *", new_task, allow_overlap=False)
+cron.add_task("*/10 * * * * *", new_task)
 
-# Query tasks
+# 查询任务信息
 all_tasks = cron.list_tasks()
 task_info = cron.get_task("initial_task")
-print(f"Status: {task_info.state}, Priority: {task_info.priority}")
+print(f"状态：{task_info.state}")
 
-# Control task execution
-cron.pause_task("initial_task")      # Pause
-cron.resume_task("initial_task")     # Resume
-cron.disable_task("initial_task")    # Disable (keep config)
-cron.enable_task("initial_task")     # Enable
-cron.remove_task("initial_task")     # Remove completely
+# 生命周期管理
+cron.pause_task("initial_task")      # 暂停
+cron.resume_task("initial_task")     # 恢复
+cron.disable_task("initial_task")    # 禁用（保留配置）
+cron.remove_task("initial_task")     # 移除
 ```
 
-### 3. Intelligent Retry Mechanism ⭐⭐⭐⭐⭐
+### 3. 智能重试机制 ⭐⭐⭐⭐⭐
 
-Automatic retry on failure with configurable attempts, delay, and custom error handlers.
+失败自动重试，可配置最大重试次数、重试间隔、错误回调。
 
 ```python
 def on_error_handler(error, record):
-    """Custom error callback"""
-    print(f"Task {record.task_name} failed: {error}")
-    print(f"Total retries: {record.retry_count}")
+    """自定义错误处理"""
+    print(f"任务 {record.task_name} 最终失败：{error}")
 
 cron = AsyncFasterCron(
-    max_retries=3,                    # Max retry attempts
-    retry_delay=5.0,                  # Wait 5s between retries
-    on_error=on_error_handler         # Custom error handler
+    max_retries=3,           # 最多重试 3 次
+    retry_delay=5.0,         # 每次间隔 5 秒
+    on_error=on_error_handler
 )
 
 @cron.schedule("* * * * * *")
 async def flaky_task(ctx):
-    # May fail several times before succeeding
     if should_fail():
-        raise ValueError("Temporary error")
+        raise ValueError("临时错误")
     do_work()
 ```
 
-**Features:**
-- Automatic retry count tracking
-- Execution history maintained (last 1000 successful executions)
-- Error history maintained (last 100 failures)
-- Automatic update of `TaskInfo.last_result` after each execution
+### 4. 一次性任务 ⭐⭐⭐
 
-### 4. One-Time Tasks ⭐⭐⭐
-
-Execute a task once after a delay or at a specific time without permanent registration.
+无需注册，立即调度延迟或定时执行的任务。
 
 ```python
 from datetime import datetime, timedelta
-from faster_cron import AsyncFasterCron
 
-cron = AsyncFasterCron()
+# 延迟 N 秒后执行一次
+cron.once_in(300, send_email)  # 5 分钟后
 
-# Execute in N seconds
-cron.once_in(300, send_email_report)  # Execute in 5 minutes
-
-# Execute at specific time
+# 指定时间执行一次
 target_time = datetime.now() + timedelta(hours=1)
-cron.run_at(target_time, generate_daily_report)
-
-# Context includes execution type
-async def one_time_task(ctx):
-    print(f"Execution type: {ctx['execution_type']}")
-    # ctx['execution_type'] = 'one_time_delayed' or 'one_time_scheduled'
+cron.run_at(target_time, generate_report)
 ```
 
-### 5. Flexible Logging Configuration ⭐⭐⭐
+### 5. 灵活日志配置 ⭐⭐⭐
 
-Customize log format, add file logging, or provide your own logger instance.
+自定义日志格式、输出到文件、使用外部 logger。
 
 ```python
 import logging
 
-# Option 1: Default settings
-cron = AsyncFasterCron()
+# 自定义格式
+cron = AsyncFasterCron(log_format="[%(levelname)s] %(message)s")
 
-# Option 2: Custom format
-custom_format = "[%(levelname)s] %(asctime)s - %(message)s"
-cron = AsyncFasterCron(log_format=custom_format)
+# 文件日志
+cron = AsyncFasterCron(log_file="/var/log/faster-cron.log")
 
-# Option 3: Log to file
-cron = AsyncFasterCron(
-    log_level=logging.DEBUG,
-    log_file="/var/log/faster-cron.log"
-)
-
-# Option 4: Use existing logger
-existing_logger = logging.getLogger("myapp.cron")
-cron = AsyncFasterCron(custom_logger=existing_logger)
+# 外部 logger
+cron = AsyncFasterCron(custom_logger=custom_logger)
 ```
 
-### 6. Config File Loading ⭐⭐⭐
+### 6. 配置文件加载 ⭐⭐⭐
 
-Load task configurations from YAML or JSON files for easy deployment and management.
+从 YAML/JSON 文件加载任务配置。
 
 ```yaml
 # tasks.yaml
 tasks:
   - module: my_app.backup
     function: nightly_backup
-    expression: "0 2 * * *"      # Every day at 2 AM
+    expression: "0 2 * * *"      # 每天凌晨 2 点
     allow_overlap: false
     priority: 5
-
-  - module: my_app.monitoring
-    function: health_check
-    expression: "*/30 * * * * *"  # Every 30 minutes
-    allow_overlap: true
-    priority: 3
-```
-
-```json
-// tasks.json
-{
-  "tasks": [
-    {
-      "module": "my_app.reports",
-      "function": "send_weekly_report",
-      "expression": "0 9 * * 1",    # Monday at 9 AM
-      "allow_overlap": true,
-      "priority": 2
-    }
-  ]
-}
 ```
 
 ```python
 from faster_cron import AsyncFasterCron
 
 cron = AsyncFasterCron()
-
-# Load from YAML (requires pyyaml)
 cron.load_from_yaml("tasks.yaml")
-
-# Load from JSON (built-in, no extra dependency)
+# 或
 cron.load_from_json("tasks.json")
-
-# Can also be combined with decorator-based registration
-@cron.schedule("* * * * * *")
-async def manual_task(ctx):
-    pass
 ```
 
-### 7. Graceful Shutdown & Resource Management ⭐⭐⭐⭐
+### 7. 优雅关闭和资源管理 ⭐⭐⭐⭐
 
-Clean shutdown with proper cleanup of all active tasks and threads.
+干净地停止所有活跃任务，避免资源泄漏。
 
 ```python
 import signal
 import sys
 
 def handle_shutdown(signum, frame):
-    print("\nShutting down gracefully...")
-    cron.stop()  # Wait for all tasks to complete
+    print("优雅关闭中...")
+    cron.stop()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, handle_shutdown)
-signal.signal(signal.SIGTERM, handle_shutdown)
-
-cron.run(wait_on_exit=True)  # Or await cron.start() then await cron.stop()
+cron.run(wait_on_exit=True)
 ```
 
-### 8. Smart Parameter Injection
+### 8. 智能参数注入
 
-Automatically detect function signature and inject context when needed.
+自动检测函数签名并注入 context。
 
 ```python
-# No context parameter - works as before
 @cron.schedule("*/5 * * * * *")
 def simple_task():
-    print("Simple task")
+    print("简单任务")
 
-# With context parameter - gets automatic injection
 @cron.schedule("*/5 * * * * *")
 def smart_task(context):
-    print(f"Task name: {context['task_name']}")
-    print(f"Scheduled at: {context['scheduled_at']}")
-
-# With kwargs - gets full context dict
-@cron.schedule("*/5 * * * * *")
-def flexible_task(**kwargs):
-    context = kwargs.get('context', {})
-    print(f"Context keys: {list(context.keys())}")
+    print(f"任务名：{context['task_name']}")
+    print(f"计划时间：{context['scheduled_at']}")
 ```
 
-### 9. Concurrency Control
+### 9. 并发控制
 
-Control whether multiple instances of the same task can run simultaneously.
+控制同一任务是否允许重叠执行。
 
 ```python
-# Allow overlapping (default)
+# 允许重叠（默认）
 @cron.schedule("*/5 * * * * *", allow_overlap=True)
 async def fast_task(ctx):
-    await asyncio.sleep(6)  # Takes 6 seconds, overlaps allowed
+    await asyncio.sleep(6)  # 耗时 6 秒
 
-# Single instance only
+# 单例模式
 @cron.schedule("* * * * * *", allow_overlap=False)
 async def heavy_task(ctx):
-    await asyncio.sleep(200)  # If previous hasn't finished, skip this cycle
+    await asyncio.sleep(200)  # 若上一个未结束则跳过本次
 ```
 
 ---
 
-## 📖 Complete API Reference
+## 📖 完整 API 参考
 
-### Constructor Options
+### 构造函数选项
 
 #### `AsyncFasterCron`
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `log_level` | int | `logging.INFO` | Logging level |
-| `log_format` | str | Standard format | Custom log format string |
-| `log_file` | Optional[str] | None | Log to file path |
-| `custom_logger` | Optional[Logger] | None | Use existing logger |
-| `max_retries` | int | 3 | Maximum retry attempts |
-| `retry_delay` | float | 5.0 | Seconds between retries |
-| `on_error` | Optional[callable] | None | Error callback `(error, record)` |
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `log_level` | int | `logging.INFO` | 日志级别 |
+| `log_format` | str | 标准格式 | 自定义日志格式 |
+| `log_file` | Optional[str] | None | 日志文件路径 |
+| `custom_logger` | Optional[Logger] | None | 自定义 logger |
+| `max_retries` | int | 3 | 最大重试次数 |
+| `retry_delay` | float | 5.0 | 重试间隔秒数 |
+| `on_error` | Optional[callable] | None | 错误回调 |
 
 #### `FasterCron`
 
-Same options as `AsyncFasterCron`, plus:
+与 `AsyncFasterCron` 相同，额外增加：
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `wait_on_exit` | bool | True | Wait for threads on exit |
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `wait_on_exit` | bool | True | 退出时等待线程完成 |
 
----
+### 任务注册方法
 
-### Task Registration Methods
-
-#### Decorator Method
+#### 装饰器方式
 
 ```python
 @cron.schedule(expression, allow_overlap=True, priority=0)
@@ -351,13 +280,7 @@ async def task_function(context):
     ...
 ```
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `expression` | str | Yes | - | Cron expression (5 or 6 fields) |
-| `allow_overlap` | bool | No | True | Allow concurrent executions |
-| `priority` | int | No | 0 | Task priority (higher = more important) |
-
-#### Programmatic Method
+#### 编程方式
 
 ```python
 def task_func(context):
@@ -371,252 +294,121 @@ info = cron.add_task(
 )
 ```
 
----
-
-### Task Lifecycle Methods
-
-```python
-# Add (same as schedule but returns TaskInfo)
-info = cron.add_task(expr, func, ...)
-
-# Remove
-success = cron.remove_task("task_name")  # Returns bool
-
-# Pause/Resume
-cron.pause_task("task_name")
-cron.resume_task("task_name")
-
-# Disable/Enable (keeps config, prevents scheduling)
-cron.disable_task("task_name")
-cron.enable_task("task_name")
-
-# Query
-all_tasks = cron.list_tasks()           # List[TaskInfo]
-task_info = cron.get_task("task_name")  # TaskInfo | None
-```
-
----
-
-### One-Time Task Methods
-
-```python
-# Delay by X seconds
-cron.once_in(delay_seconds, func, ...)
-
-# Execute at specific datetime
-cron.run_at(target_datetime, func, ...)
-```
-
-Both methods return the original function (for chaining).
-
----
-
-### Configuration Loading Methods
-
-```python
-# Load from YAML
-count = cron.load_from_yaml("tasks.yaml")  # Returns number of tasks loaded
-
-# Load from JSON
-count = cron.load_from_json("tasks.json")
-
-# Note: Multiple calls append to existing tasks
-```
-
----
-
-### Scheduler Control Methods
-
-#### Async Mode
-
-```python
-await cron.start()      # Start scheduler
-await cron.stop()       # Graceful shutdown (waits for tasks)
-await cron.stop(timeout)  # With timeout in seconds
-```
-
-#### Sync Mode
-
-```python
-cron.run(wait_on_exit=True)  # Start and block
-cron.stop(wait_timeout=30)   # Stop with timeout
-```
-
----
-
-### Task Information
-
-#### `TaskInfo` Dataclass
+### 任务信息对象 (`TaskInfo`)
 
 ```python
 @dataclass
 class TaskInfo:
-    name: str                        # Task name (function name)
-    expression: str                  # Cron expression
-    func: Callable                   # Function reference
-    allow_overlap: bool              # Overlap setting
-    state: TaskState                 # Current state enum
-    priority: int = 0                # Priority level
-    retry_count: int = 0             # Current retry count
-    last_execution: Optional[datetime]  # Last execution time
-    last_result: Optional[str]       # Last result message
-    created_at: datetime             # When registered
+    name: str                        # 任务名称
+    expression: str                  # Cron 表达式
+    func: Callable                   # 函数引用
+    allow_overlap: bool              # 是否允许重叠
+    state: TaskState                 # 当前状态枚举
+    priority: int = 0                # 优先级
+    retry_count: int = 0             # 当前重试次数
+    last_execution: Optional[datetime]  # 上次执行时间
+    last_result: Optional[str]       # 上次执行结果
 ```
 
-#### `TaskState` Enum
+### `TaskState` 枚举
 
-| Value | Description |
-|-------|-------------|
-| `PENDING` | Waiting for schedule |
-| `RUNNING` | Currently executing |
-| `PAUSED` | Temporarily disabled |
-| `DISABLED` | Permanently disabled (but kept) |
-| `COMPLETED` | Finished |
+| 值 | 说明 |
+|----|------|
+| `PENDING` | 待调度 |
+| `RUNNING` | 运行中 |
+| `PAUSED` | 已暂停 |
+| `DISABLED` | 已禁用（保留配置） |
+| `COMPLETED` | 已完成 |
 
-#### `ExecutionRecord` Dataclass
+---
 
-```python
-@dataclass
-class ExecutionRecord:
-    task_name: str
-    scheduled_at: datetime
-    started_at: datetime
-    finished_at: Optional[datetime]
-    success: bool
-    error_message: Optional[str]
-    retry_count: int
-    duration_seconds: Optional[float]
-    
-    @property
-    def elapsed_ms(self) -> Optional[float]:  # Conversion helper
+## 🔧 Cron 表达式格式
+
+支持标准 5 位和 6 位 Cron 表达式：
+
+### 字段说明
+
+| 位置 | 字段 | 值范围 | 特殊字符 |
+|------|------|--------|----------|
+| 1 (或 0) | 秒 | 0-59 | `*`, `,`, `-`, `/` |
+| 2 | 分 | 0-59 | `*`, `,`, `-`, `/` |
+| 3 | 时 | 0-23 | `*`, `,`, `-`, `/` |
+| 4 | 日 | 1-31 | `*`, `,`, `-`, `/` |
+| 5 | 月 | 1-12 | `*`, `,`, `-`, `/` |
+| 6 (可选) | 周 | 0-6(周日=0) | `*`, `,`, `-`, `/` |
+
+### 特殊字符
+
+- `*` - 任意值
+- `,` - 列表分隔符 (如 `1,3,5`)
+- `-` - 范围 (如 `1-5` = 1,2,3,4,5)
+- `/` - 步长 (如 `*/5` = 每 5 个单位)
+
+### 常用示例
+
+| 表达式 | 含义 |
+|--------|------|
+| `* * * * * *` | 每秒执行 |
+| `*/5 * * * * *` | 每 5 秒执行 |
+| `0 */30 * * * *` | 每 30 分钟执行 |
+| `0 0 * * * *` | 每小时执行 |
+| `0 0 9-17 * * *` | 工作日 9:00-17:00 每小时执行 |
+| `0 0 0 * * 0` | 每周日凌晨 0 点执行 |
+| `30 9 * * 1,5` | 周一和周五上午 9:30 执行 |
+
+---
+
+## 🎬 演示程序
+
+运行 `demo/` 目录中的示例：
+
+### 异步模式演示
+```bash
+python3 demo/v2_demo_async.py
+```
+
+### 同步模式演示
+```bash
+python3 demo/v2_demo_sync.py
+```
+
+### 配置文件加载演示
+```bash
+python3 demo/v2_demo_config.py
 ```
 
 ---
 
-## 🔧 Cron Expression Format
-
-Supports standard 5-field and 6-field cron expressions:
-
-### Fields (in order)
-
-| Position | Field | Values | Special Characters |
-|----------|-------|--------|-------------------|
-| 1 (or 0) | Second | 0-59 | `*`, `,`, `-`, `/` |
-| 2 | Minute | 0-59 | `*`, `,`, `-`, `/` |
-| 3 | Hour | 0-23 | `*`, `,`, `-`, `/` |
-| 4 | Day of Month | 1-31 | `*`, `,`, `-`, `/`, `L`, `W` |
-| 5 | Month | 1-12 | `*`, `,`, `-`, `/` |
-| 6 (optional) | Day of Week | 0-6 (Sun=0) | `*`, `,`, `-`, `/` |
-
-### Special Characters
-
-- `*` - Any value
-- `,` - List separator (e.g., `1,3,5`)
-- `-` - Range (e.g., `1-5` = 1,2,3,4,5)
-- `/` - Step values (e.g., `*/5` = every 5 units)
-
-### Examples
-
-| Expression | Meaning |
-|------------|---------|
-| `* * * * * *` | Every second |
-| `*/5 * * * * *` | Every 5 seconds |
-| `0 */30 * * * *` | Every 30 minutes |
-| `0 0 * * * *` | Every hour |
-| `0 0 9-17 * * *` | Every hour during work hours (9-17) |
-| `0 0 0 * * 0` | Every Sunday at midnight |
-| `30 9 * * 1,5` | Monday and Friday at 9:30 |
-| `0 0 1 1 *` | Every January 1st |
-
----
-
-## 📁 Project Structure
-
-```
-faster-cron/
-├── faster_cron/                    # Core package
-│   ├── __init__.py                 # Export AsyncFasterCron, FasterCron
-│   ├── base.py                     # CronBase (expression parser)
-│   ├── models.py                   # TaskInfo, TaskState, ExecutionRecord
-│   ├── async_cron.py               # AsyncFasterCron implementation
-│   └── sync_cron.py                # FasterCron implementation
-├── test/                           # Test suite
-│   ├── test_v2_improvements.py     # Core improvements
-│   ├── test_logging_config.py      # Logging tests
-│   ├── test_dynamic_tasks.py       # Task management tests
-│   ├── test_retry_mechanism.py     # Retry mechanism tests
-│   ├── test_one_time_tasks.py      # One-time task tests
-│   └── test_config_loading.py      # Config loading tests
-├── demo/                           # Demo applications
-│   ├── v2_demo_async.py            # Async mode demonstration
-│   ├── v2_demo_sync.py             # Sync mode demonstration
-│   └── v2_demo_config.py           # Config loading demonstration
-├── pyproject.toml                  # Project configuration
-└── README.md                       # This file
-```
-
----
-
-## 🧪 Running Tests
+## 🧪 运行测试
 
 ```bash
-# Install test dependencies
-pip install pytest pytest-asyncio pyyaml tomli
+# 安装测试依赖
+pip install pytest pytest-asyncio pyyaml
 
-# Run all tests
-pytest
+# 运行所有测试
+pytest test/ -v
 
-# Run specific test file
-pytest test/test_dynamic_tasks.py -v
-
-# Run with coverage
+# 查看覆盖率
 pytest --cov=faster_cron
 ```
 
 ---
 
-## 💡 Best Practices
+## 💡 最佳实践
 
-### 1. Choosing Between Async and Sync
+### 选择异步还是同步？
 
-**Use AsyncMode when:**
-- Your application uses async frameworks (FastAPI, aiohttp, etc.)
-- You need non-blocking I/O operations
-- Running many concurrent tasks
+**使用异步模式当：**
+- 应用使用 async 框架 (FastAPI, aiohttp)
+- 需要非阻塞 I/O
+- 运行大量并发任务
 
-**Use Sync Mode when:**
-- Traditional blocking scripts
-- Simple automation tasks
-- No async framework dependencies
+**使用同步模式当：**
+- 传统阻塞脚本
+- 简单的自动化任务
+- 无 async 框架依赖
 
-### 2. Managing Long-Running Tasks
-
-```python
-# For long-running tasks, prevent overlap
-@cron.schedule("*/5 * * * * *", allow_overlap=False)
-async def long_task(ctx):
-    await process_data()  # May take minutes
-    
-# Without overlap flag, skipped cycles
-# With overlap=False, runs only once until completed
-```
-
-### 3. Error Handling Patterns
-
-```python
-# Pattern 1: Individual task retry
-cron = AsyncFasterCron(max_retries=3, retry_delay=10.0)
-
-# Pattern 2: Global error handler
-def global_handler(error, record):
-    send_alert(record.task_name, error)
-    # Optionally re-raise for additional handling
-    raise error
-
-cron = AsyncFasterCron(on_error=global_handler)
-```
-
-### 4. Production Deployment
+### 生产环境部署
 
 ```python
 import signal
@@ -630,9 +422,8 @@ cron = AsyncFasterCron(
     retry_delay=30.0
 )
 
-# Signal handlers
 def graceful_shutdown(signum, frame):
-    print("Graceful shutdown initiated...")
+    print("准备优雅关闭...")
     cron.stop()
     sys.exit(0)
 
@@ -647,60 +438,27 @@ except KeyboardInterrupt:
 
 ---
 
-## 🎬 Demos
+## 🤝 贡献
 
-Explore the `demo/` directory:
+欢迎贡献！请：
 
-### Async Mode Demo
-```bash
-python3 demo/v2_demo_async.py
-```
-Demonstrates all v2 features with async execution, 15-second observation period.
-
-### Sync Mode Demo
-```bash
-python3 demo/v2_demo_sync.py
-```
-Same features with synchronous execution and signal handling.
-
-### Config Loading Demo
-```bash
-python3 demo/v2_demo_config.py
-```
-Shows how to load tasks from YAML/JSON files with dynamic imports.
+1. Fork 仓库
+2. 创建特性分支
+3. 为新功能添加测试
+4. 确保所有测试通过
+5. 提交 Pull Request
 
 ---
 
-## 🤝 Contributing
+## 📄 许可证
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
----
-
-## 📄 License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-## 📞 Support
-
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check existing documentation
-- Review demo files for examples
+MIT License. 详见 [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
 
 Made with ❤️ by Bernard Simon  
-FasterCron v2.0 · Light, Fast, Powerful
+FasterCron · 轻量、快速、强大
 
 </div>
