@@ -141,20 +141,44 @@ async def flaky_task(ctx):
     do_work()
 ```
 
-### 4. 一次性任务 ⭐⭐⭐
+### 4. 一次性任务 ⭐⭐⭐⭐
 
-无需注册，立即调度延迟或定时执行的任务。
+无需注册，立即调度延迟或定时执行的任务。支持**同步**和**异步**双模式，直接使用 `AsyncFasterCron` / `FasterCron` 实例。
 
 ```python
 from datetime import datetime, timedelta
+from faster_cron import FasterCron, AsyncFasterCron
 
-# 延迟 N 秒后执行一次
-cron.once_in(300, send_email)  # 5 分钟后
 
-# 指定时间执行一次
-target_time = datetime.now() + timedelta(hours=1)
-cron.run_at(target_time, generate_report)
+# === 同步模式 - 作为装饰器 ===
+cron_sync = FasterCron()
+
+@cron_sync.once_in(300)  # 5 分钟后
+def send_email(ctx):
+    print(f"正在发送邮件... (计划时间：{ctx['scheduled_at']})")
+
+# 或者指定时间
+@cron_sync.run_at(datetime.now() + timedelta(hours=1))
+def generate_report(ctx):
+    print(f"生成报告...")
+
+
+# === 异步模式 - 作为装饰器 ===
+async def main():
+    cron_async = AsyncFasterCron()
+    
+    @cron_async.once_in(300)
+    async def send_async_email(ctx):
+        print(f"异步发送电子邮件...")
+    
+    @cron_async.run_at(datetime.now() + timedelta(hours=1))
+    async def generate_async_report(ctx):
+        print(f"异步生成报告...")
+    
+    await cron_async.start()
 ```
+
+完整示例：[demo/v2_demo_one_shot.py](./demo/v2_demo_one_shot.py)（已集成到原有 demo 中）
 
 ### 5. 灵活日志配置 ⭐⭐⭐
 

@@ -8,6 +8,7 @@ AsyncFasterCron: 异步定时任务调度器 v2.0
 - 动态任务管理 (add/remove/pause/resume/list)
 - 异常处理与重试机制
 - 资源管理
+- 一次性任务支持 (once_in, run_at)
 """
 
 import asyncio
@@ -16,6 +17,7 @@ import datetime
 from datetime import timedelta
 import logging
 from typing import Callable, Optional, Set, Dict, Any
+from functools import partial
 
 from .models import TaskInfo, TaskState, ExecutionRecord
 
@@ -385,3 +387,177 @@ class AsyncFasterCron:
             self.task_registry[context["task_name"]].last_result = (
                 "success" if execution_record.success else execution_record.error_message
             )
+
+    # ========== 一次性任务支持 ==========
+    
+    def once_in(self, seconds: float, func: Optional[Callable] = None):
+        """
+        延迟 N 秒后执行一次的装饰器
+        
+        Args:
+            seconds: 延迟秒数
+            
+        Example:
+            @cron.once_in(300)  # 5 分钟后
+            async def send_email(ctx):
+                ...
+        """
+        target_time = datetime.datetime.now() + timedelta(seconds=seconds)
+        return self.run_at(target_time)(func)
+
+    def run_at(self, target_time: datetime.datetime, func: Optional[Callable] = None):
+        """
+        指定时间执行一次的装饰器
+        
+        Args:
+            target_time: 目标执行时间（datetime 对象）
+            
+        Example:
+            @cron.run_at(datetime.now() + timedelta(hours=1))
+            async def generate_report(ctx):
+                ...
+        """
+        if func is not None:
+            # 直接作为装饰器使用 - 立即注册并调度
+            sig = inspect.signature(func)
+            
+            # 创建执行记录
+            execution_record = ExecutionRecord(
+                task_name=func.__name__,
+                scheduled_at=target_time,
+                started_at=None,
+                finished_at=None,
+                success=False,
+                duration_seconds=0.0,
+                retry_count=0,
+                error_message=None
+            )
+            
+            # 创建任务信息
+            task_info = TaskInfo(
+                name=func.__name__,
+                expression="",
+                func=func,
+                allow_overlap=False,
+                state=TaskState.PENDING,
+                priority=0
+            )
+            
+            # 添加到任务列表（标记为一次性任务）
+            self.tasks.append({
+                "target_time": target_time,
+                "func": func,
+                "execution_record": execution_record,
+                "max_retries": self.max_retries,
+                "retry_delay": self.retry_delay,
+                "on_error": self.on_error,
+                "logger": self.logger,
+                "type": "one_shot"
+            })
+            
+            # 注册到任务管理
+            self.task_registry[func.__name__] = task_info
+            
+            # 如果调度器正在运行，启动后台监控循环来执行一次性任务
+            if self._running:
+                asyncio.create_task(self._execute_one_shot(task_info, execution_record))
+            
+            self.logger.info(f"One-shot task '{func.__name__}' scheduled at {target_time}")
+            return execution_record
+        
+        # 如果只传了 target_time，返回一个部分函数用于链式调用
+        return partial(self.run_at, target_time)
+    
+    async def _execute_one_shot(self, task_info: TaskInfo, execution_record: ExecutionRecord):
+        """执行一次性任务"""
+        func = task_info.func
+        target_time = execution_record.scheduled_at
+        max_retries = self.max_retries
+        retry_delay = self.retry_delay
+        on_error = self.on_error
+        logger = self.logger
+        
+        # 等待到指定时间
+        now = datetime.datetime.now()
+        delay_seconds = (target_time - now).total_seconds()
+        
+        if delay_seconds > 0:
+            await asyncio.sleep(delay_seconds)
+        
+        # 检查是否已被取消
+        if not self._running:
+            return
+        
+        # 更新执行记录
+        execution_record.started_at = datetime.datetime.now()
+        
+        # 设置上下文
+        context = {"scheduled_at": target_time, "task_name": task_info.name}
+        
+        # 重试逻辑
+        retry_count = 0
+        last_error = None
+        
+        while retry_count <= max_retries:
+            try:
+                sig = inspect.signature(func)
+                kwargs = {"context": context} if "context" in sig.parameters else {}
+                
+                result = func(**kwargs)
+                if asyncio.iscoroutine(result):
+                    await result
+                
+                # 成功
+                execution_record.success = True
+                execution_record.finished_at = datetime.datetime.now()
+                execution_record.duration_seconds = (
+                    execution_record.finished_at - execution_record.started_at
+                ).total_seconds()
+                
+                self.execution_history.append(execution_record)
+                if len(self.execution_history) > 1000:
+                    self.execution_history = self.execution_history[-1000:]
+                
+                logger.info(
+                    f"One-shot task '{func.__name__}' completed in {execution_record.duration_seconds:.2f}s"
+                )
+                break
+                
+            except Exception as e:
+                last_error = e
+                execution_record.error_message = str(e)
+                execution_record.retry_count = retry_count
+                
+                logger.error(
+                    f"One-shot task '{func.__name__}' failed (attempt {retry_count + 1}/{max_retries + 1}): {e}",
+                    exc_info=True
+                )
+                
+                retry_count += 1
+                
+                if retry_count <= max_retries:
+                    logger.info(f"Retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"Max retries exceeded for one-shot task '{func.__name__}'")
+        
+        # 记录失败
+        if not execution_record.success:
+            execution_record.finished_at = datetime.datetime.now()
+            execution_record.duration_seconds = (
+                execution_record.finished_at - execution_record.started_at
+            ).total_seconds()
+            self.error_history.append(execution_record)
+            
+            if len(self.error_history) > 100:
+                self.error_history = self.error_history[-100:]
+            
+            if on_error:
+                try:
+                    on_error(last_error, execution_record)
+                except Exception as callback_err:
+                    logger.error(f"Error callback failed: {callback_err}")
+        
+        # 清理任务
+        self.task_registry.pop(task_info.name, None)
+        self.tasks = [t for t in self.tasks if t.get("type") != "one_shot" or t.get("func") != func]

@@ -8,6 +8,7 @@ FasterCron: 同步多线程定时任务调度器 v2.0
 - 动态任务管理 (add/remove/pause/resume/list)
 - 异常处理与重试机制
 - 资源管理
+- 一次性任务支持 (once_in, run_at)
 """
 
 import threading
@@ -16,7 +17,8 @@ import datetime
 from datetime import timedelta
 import logging
 import inspect
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional, Set
+from functools import partial
 
 from .models import TaskInfo, TaskState, ExecutionRecord
 
@@ -98,7 +100,18 @@ class FasterCron:
         allow_overlap: bool = True,
         priority: int = 0
     ) -> TaskInfo:
-        """动态添加任务"""
+        """
+        动态添加任务
+        
+        Args:
+            expression: Cron 表达式
+            func: 任务函数
+            allow_overlap: 是否允许重叠执行
+            priority: 任务优先级
+            
+        Returns:
+            TaskInfo: 任务信息对象
+        """
         task_info = TaskInfo(
             name=func.__name__,
             expression=expression,
@@ -113,8 +126,7 @@ class FasterCron:
             "func": func,
             "allow_overlap": allow_overlap,
             "name": func.__name__,
-            "priority": priority,
-            "last_worker": None
+            "priority": priority
         })
         self.task_registry[func.__name__] = task_info
         
@@ -124,20 +136,21 @@ class FasterCron:
         return task_info
 
     def remove_task(self, task_name: str) -> bool:
-        """通过任务名移除任务"""
+        """移除指定任务"""
         if task_name not in self.task_registry:
             return False
         
         self.tasks = [t for t in self.tasks if t["name"] != task_name]
         del self.task_registry[task_name]
         
+        # 如果正在运行，暂停它
         self.paused_tasks.discard(task_name)
         
         self.logger.info(f"Removed task '{task_name}'")
         return True
 
     def pause_task(self, task_name: str) -> bool:
-        """暂停指定任务"""
+        """暂停任务"""
         if task_name not in self.task_registry:
             return False
         
@@ -161,7 +174,7 @@ class FasterCron:
         return True
 
     def disable_task(self, task_name: str) -> bool:
-        """禁用任务"""
+        """禁用任务（不调度但保留配置）"""
         if task_name not in self.task_registry:
             return False
         
@@ -207,51 +220,32 @@ class FasterCron:
         from .base import CronBase
         return CronBase.is_time_match(expression, now)
 
-    def run(self, wait_on_exit: bool = True):
-        """阻塞启动所有任务监控器"""
+    def start(self):
+        """启动调度器"""
         self._running = True
-        self.logger.info(f"FasterCron (Sync Mode) started with {len(self.tasks)} tasks.")
-
         for task in self.tasks:
-            t = threading.Thread(
+            monitor_thread = threading.Thread(
                 target=self._monitor_loop,
                 args=(task,),
-                name=f"Monitor-{task['name']}",
-                daemon=False
+                daemon=True
             )
-            t.start()
-            self._monitors.append(t)
-
-        try:
-            while self._running:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.logger.info("Received SIGINT, shutting down...")
-            self._running = False
-            
-            if wait_on_exit:
-                self.logger.info(f"Waiting for {len(self._monitors)} threads to finish...")
-                for t in self._monitors:
-                    t.join(timeout=5)
-                self._monitors.clear()
+            self._monitors.append(monitor_thread)
+            monitor_thread.start()
         
-        self.logger.info("FasterCron stopped")
+        # 等待所有监控线程完成
+        for thread in self._monitors:
+            thread.join()
+        self._monitors.clear()
 
-    def stop(self, wait_timeout: float = 30.0) -> None:
+    def stop(self):
         """优雅关闭调度器"""
         self.logger.info("Stopping scheduler...")
         self._running = False
-        
-        for thread in self._monitors:
-            thread.join(timeout=wait_timeout / max(len(self._monitors), 1))
-        
-        self._monitors.clear()
         self.logger.info("Scheduler stopped")
 
-    def _monitor_loop(self, task: Dict[str, Any]):
-        """每个任务独立的监听循环（高精度版本）"""
+    def _monitor_loop(self, task):
+        """监控单个任务的执行循环"""
         last_trigger_ts = 0
-
         while self._running:
             try:
                 # 检查是否暂停
@@ -261,10 +255,10 @@ class FasterCron:
                 
                 now = datetime.datetime.now()
                 next_trigger = self._calculate_next_trigger(task["expression"], now)
-                sleep_seconds = (next_trigger - now).total_seconds()
+                delay_seconds = (next_trigger - now).total_seconds()
                 
-                safe_sleep = max(0.01, min(sleep_seconds, 0.5))
-                time.sleep(safe_sleep)
+                wait_time = min(delay_seconds, 0.5)
+                time.sleep(wait_time)
                 
                 if not self._running:
                     break
@@ -371,3 +365,179 @@ class FasterCron:
             self.task_registry[context["task_name"]].last_result = (
                 "success" if execution_record.success else execution_record.error_message
             )
+
+    # ========== 一次性任务支持 ==========
+    
+    def once_in(self, seconds: float, func: Optional[Callable] = None):
+        """
+        延迟 N 秒后执行一次的装饰器
+        
+        Args:
+            seconds: 延迟秒数
+            
+        Example:
+            @cron.once_in(300)  # 5 分钟后
+            def send_email(ctx):
+                ...
+        """
+        target_time = datetime.datetime.now() + timedelta(seconds=seconds)
+        return self.run_at(target_time)(func)
+
+    def run_at(self, target_time: datetime.datetime, func: Optional[Callable] = None):
+        """
+        指定时间执行一次的装饰器
+        
+        Args:
+            target_time: 目标执行时间（datetime 对象）
+            
+        Example:
+            @cron.run_at(datetime.now() + timedelta(hours=1))
+            def generate_report(ctx):
+                ...
+        """
+        if func is not None:
+            # 直接作为装饰器使用 - 立即注册并调度
+            sig = inspect.signature(func)
+            
+            # 创建执行记录
+            execution_record = ExecutionRecord(
+                task_name=func.__name__,
+                scheduled_at=target_time,
+                started_at=None,
+                finished_at=None,
+                success=False,
+                duration_seconds=0.0,
+                retry_count=0,
+                error_message=None
+            )
+            
+            # 创建任务信息
+            task_info = TaskInfo(
+                name=func.__name__,
+                expression="",
+                func=func,
+                allow_overlap=False,
+                state=TaskState.PENDING,
+                priority=0
+            )
+            
+            # 添加到任务列表（标记为一次性任务）
+            self.tasks.append({
+                "target_time": target_time,
+                "func": func,
+                "execution_record": execution_record,
+                "max_retries": self.max_retries,
+                "retry_delay": self.retry_delay,
+                "on_error": self.on_error,
+                "logger": self.logger,
+                "type": "one_shot"
+            })
+            
+            # 注册到任务管理
+            self.task_registry[func.__name__] = task_info
+            
+            # 立即启动后台线程执行一次性的任务
+            if self._running:
+                threading.Thread(
+                    target=self._execute_one_shot,
+                    args=(task_info, execution_record),
+                    daemon=True
+                ).start()
+            
+            self.logger.info(f"One-shot task '{func.__name__}' scheduled at {target_time}")
+            return execution_record
+        
+        # 如果只传了 target_time，返回一个部分函数用于链式调用
+        return partial(self.run_at, target_time)
+    
+    def _execute_one_shot(self, task_info: TaskInfo, execution_record: ExecutionRecord):
+        """执行一次性任务"""
+        func = task_info.func
+        target_time = execution_record.scheduled_at
+        max_retries = self.max_retries
+        retry_delay = self.retry_delay
+        on_error = self.on_error
+        logger = self.logger
+        
+        # 等待到指定时间
+        now = datetime.datetime.now()
+        delay_seconds = (target_time - now).total_seconds()
+        
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+        
+        # 检查是否已被取消
+        if not self._running:
+            return
+        
+        # 更新执行记录
+        execution_record.started_at = datetime.datetime.now()
+        
+        # 设置上下文
+        context = {"scheduled_at": target_time, "task_name": task_info.name}
+        
+        # 重试逻辑
+        retry_count = 0
+        last_error = None
+        
+        while retry_count <= max_retries:
+            try:
+                sig = inspect.signature(func)
+                kwargs = {"context": context} if "context" in sig.parameters else {}
+                
+                func(**kwargs)
+                
+                # 成功
+                execution_record.success = True
+                execution_record.finished_at = datetime.datetime.now()
+                execution_record.duration_seconds = (
+                    execution_record.finished_at - execution_record.started_at
+                ).total_seconds()
+                
+                self.execution_history.append(execution_record)
+                if len(self.execution_history) > 1000:
+                    self.execution_history = self.execution_history[-1000:]
+                
+                logger.info(
+                    f"One-shot task '{func.__name__}' completed in {execution_record.duration_seconds:.2f}s"
+                )
+                break
+                
+            except Exception as e:
+                last_error = e
+                execution_record.error_message = str(e)
+                execution_record.retry_count = retry_count
+                
+                logger.error(
+                    f"One-shot task '{func.__name__}' failed (attempt {retry_count + 1}/{max_retries + 1}): {e}",
+                    exc_info=True
+                )
+                
+                retry_count += 1
+                
+                if retry_count <= max_retries:
+                    logger.info(f"Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Max retries exceeded for one-shot task '{func.__name__}'")
+        
+        # 记录失败
+        if not execution_record.success:
+            execution_record.finished_at = datetime.datetime.now()
+            execution_record.duration_seconds = (
+                execution_record.finished_at - execution_record.started_at
+            ).total_seconds()
+            self.error_history.append(execution_record)
+            
+            if len(self.error_history) > 100:
+                self.error_history = self.error_history[-100:]
+            
+            if on_error:
+                try:
+                    on_error(last_error, execution_record)
+                except Exception as callback_err:
+                    logger.error(f"Error callback failed: {callback_err}")
+        
+        # 清理任务
+        self.task_registry.pop(task_info.name, None)
+        self.tasks = [t for t in self.tasks if t.get("type") != "one_shot" or t.get("func") != func]
