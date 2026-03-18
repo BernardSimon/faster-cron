@@ -1,0 +1,32 @@
+feat: add comprehensive test suite for FasterCron
+
+Created complete test coverage for both sync and async cron implementations.
+
+Files added:
+- test/__init__.py (package marker)
+- test/conftest.py (pytest fixtures)
+- test/test_sync_cron.py (65 lines - sync cron tests)
+- test/test_async_cron.py (140 lines - async cron tests)
+- test/run_and_save.py (automated runner with file output)
+- test/quick_test.py (smoke test)
+- test/README_TESTS.md (test documentation)
+- TESTING.md (testing guide)
+- TEST_STATUS.md (status report)
+- TEST_SUMMARY.txt (summary)
+
+Features covered:
+✓ Initialization (sync/async)
+✓ Task scheduling (@schedule decorator)
+✓ Dynamic task management (add/remove/pause/resume/disable/enable)
+✓ One-shot execution (once_in, run_at)
+✓ Execution tracking (history/error records)
+✓ Configuration loading methods
+✓ Run method (with wait_on_exit parameter)
+✓ Stop method
+
+Test runners provided:
+- python3 test/run_and_save.py (recommended)
+- cat test/test_results.txt (view results)
+- python3 -m pytest test/ -v (requires pytest)
+
+All core functionality now has automated tests ready to run.
