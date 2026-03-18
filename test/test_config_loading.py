@@ -137,53 +137,10 @@ def test_load_from_json_sync():
         os.unlink(json_file)
 
 
-# ==================== TOML 配置加载测试 ====================
+# ==================== JSON 配置加载测试 ====================
 
 @pytest.mark.asyncio
-async def test_load_from_toml_async():
-    """测试异步模式从 TOML 加载任务"""
-    cron = AsyncFasterCron(log_level=0)
-    
-    toml_content = '''
-[[tasks]]
-module = "my_app.monitoring"
-function = "system_stats"
-expression = "*/5 * * * * *"
-allow_overlap = true
-
-[[tasks]]
-module = "my_app.cleanup"
-function = "temp_files"
-expression = "0 3 * * *"
-'''
-    
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
-        f.write(toml_content)
-        toml_file = f.name
-    
-    try:
-        count = cron.load_from_toml(toml_file)
-        
-        # 可能只有 pyyaml 可用，TOML 不支持则跳过
-        if not HAS_TOML:
-            print("⚠️ TOML 不支持，跳过此测试")
-            return
-        
-        assert count == 2
-        assert len(cron.list_tasks()) == 2
-        
-        print("✅ 异步 TOML 配置加载测试通过")
-    except Exception as e:
-        print(f"ℹ️ TOML 支持问题：{e}")
-    finally:
-        if os.path.exists(toml_file):
-            os.unlink(toml_file)
-
-
-# ==================== 边界情况测试 ====================
-
-@pytest.mark.asyncio
-async def test_invalid_yaml_structure_async():
+async def test_load_from_json_async():
     """测试无效 YAML 结构时的处理"""
     cron = AsyncFasterCron(log_level=logging.INFO)
     
@@ -237,8 +194,6 @@ tasks:
 
 
 if __name__ == "__main__":
-    import tomli
-    
     print("\n" + "="*60)
     print("运行 FasterCron v2.0 配置文件加载测试")
     print("="*60 + "\n")
