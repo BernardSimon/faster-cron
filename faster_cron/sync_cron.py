@@ -5,6 +5,7 @@ FasterCron: 同步多线程定时任务调度器 v2.0
 - 高精度时间控制：动态计算下一触发时刻
 - 优雅状态管理：stop() 方法等待线程完成
 - 资源管理：非守护线程 + 优雅退出
+- 灵活日志配置：可自定义 logger、格式、文件输出
 """
 
 import threading
@@ -19,16 +20,49 @@ from typing import List, Dict, Any, Callable
 class FasterCron:
     """同步多线程定时任务调度器 - v2.0"""
     
-    def __init__(self, log_level=logging.INFO):
+    def __init__(
+        self,
+        log_level: int = logging.INFO,
+        log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        log_file: Optional[str] = None,
+        custom_logger: Optional[logging.Logger] = None
+    ):
         """
         初始化同步调度器
         
         Args:
-            log_level: 日志级别
+            log_level: 日志级别 (默认 INFO)
+            log_format: 日志格式字符串
+            log_file: 可选的日志文件路径
+            custom_logger: 可选的自定义 logger 对象
         """
         self.tasks: List[Dict[str, Any]] = []
-        self.logger = logging.getLogger("FasterCron.Sync")
-        self.logger.setLevel(log_level)
+        
+        if custom_logger:
+            self.logger = custom_logger
+        else:
+            # 使用 unique name 避免多个实例冲突
+            instance_id = id(self)
+            self.logger = logging.getLogger(f"FasterCron.Sync_{instance_id}")
+            self.logger.setLevel(log_level)
+            
+            # 避免重复添加 handler
+            if not self.logger.handlers:
+                # 控制台 handler
+                console_handler = logging.StreamHandler()
+                console_handler.setFormatter(logging.Formatter(log_format))
+                self.logger.addHandler(console_handler)
+                
+                # 文件 handler（可选）
+                if log_file:
+                    try:
+                        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+                        file_handler.setFormatter(logging.Formatter(log_format))
+                        self.logger.addHandler(file_handler)
+                        print(f"✅ 日志已配置到文件：{log_file}")
+                    except Exception as e:
+                        print(f"⚠️ 无法创建日志文件 {log_file}: {e}")
+        
         self._running = False
         self._monitors: List[threading.Thread] = []
 
@@ -43,6 +77,7 @@ class FasterCron:
         Returns:
             装饰器函数
         """
+        from typing import Optional
         def decorator(func: Callable):
             self.tasks.append({
                 "expression": expression,
