@@ -486,3 +486,69 @@ Made with ❤️ by Bernard Simon
 FasterCron · 轻量、快速、强大
 
 </div>
+
+### 6. 配置文件加载 ⭐⭐⭐⭐⭐
+
+使用 YAML 或 JSON 文件批量加载任务配置，适合生产环境部署。
+
+```python
+from faster_cron import AsyncFasterCron, FasterCron
+
+# === YAML 配置 ===
+# tasks.yaml
+"""
+tasks:
+  - module: my_app.backup
+    function: nightly_backup
+    expression: "0 2 * * *"      # 每天凌晨 2 点
+    allow_overlap: false
+    priority: 5
+    
+  - module: my_app.cleanup  
+    function: clean_temp_files
+    expression: "0 * * * *"      # 每小时
+    allow_overlap: true
+    priority: 3
+"""
+
+# 从 YAML 加载
+cron = AsyncFasterCron()
+cron.load_from_yaml("tasks.yaml")
+
+# === JSON 配置 ===
+# tasks.json
+"""
+{
+  "tasks": [
+    {
+      "module": "my_app.monitoring",
+      "function": "health_check",
+      "expression": "* * * * *",
+      "allow_overlap": true,
+      "priority": 10
+    }
+  ]
+}
+"""
+
+# 从 JSON 加载
+cron_async = AsyncFasterCron()
+cron_async.load_from_json("tasks.json")
+
+# === 完整示例 ===
+# 1. 创建调度器
+cron = AsyncFasterCron(
+    log_file="logs/cron.log",
+    max_retries=3,
+    retry_delay=60
+)
+
+# 2. 从配置文件加载任务
+cron.load_from_yaml("config/tasks.yaml")
+
+# 3. 启动调度器
+await cron.start()
+```
+
+完整示例：[demo/v2_demo_config.py](./demo/v2_demo_config.py)
+示例配置：[examples/tasks.yaml](./examples/tasks.yaml), [examples/tasks.json](./examples/tasks.json)

@@ -561,3 +561,69 @@ class AsyncFasterCron:
         # 清理任务
         self.task_registry.pop(task_info.name, None)
         self.tasks = [t for t in self.tasks if t.get("type") != "one_shot" or t.get("func") != func]
+
+    # ========== 配置文件加载支持 ==========
+    
+    def load_from_yaml(self, filepath: str):
+        """从 YAML 文件加载任务配置
+        
+        Args:
+            filepath: YAML 配置文件路径
+            
+        Example:
+            cron = AsyncFasterCron()
+            cron.load_from_yaml("tasks.yaml")
+        """
+        import yaml
+        with open(filepath, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
+        return self._load_tasks(config)
+    
+    def load_from_json(self, filepath: str):
+        """从 JSON 文件加载任务配置
+        
+        Args:
+            filepath: JSON 配置文件路径
+            
+        Example:
+            cron = AsyncFasterCron()
+            cron.load_from_json("tasks.json")
+        """
+        import json
+        with open(filepath, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        return self._load_tasks(config)
+    
+    def _load_tasks(self, config: Dict[str, Any]):
+        """通用配置加载逻辑"""
+        tasks_config = config.get('tasks', [])
+        
+        if not tasks_config:
+            raise ValueError("No tasks found in configuration")
+        
+        for task_config in tasks_config:
+            try:
+                module_name = task_config.get('module')
+                function_name = task_config.get('function')
+                expression = task_config.get('expression')
+                allow_overlap = task_config.get('allow_overlap', True)
+                priority = task_config.get('priority', 0)
+                
+                # 导入模块和函数
+                import importlib
+                module = importlib.import_module(module_name)
+                func = getattr(module, function_name)
+                
+                # 注册任务
+                self.add_task(expression, func, allow_overlap, priority)
+                
+                self.logger.info(f"Loaded task '{function_name}' from {module_name}")
+                
+            except ImportError as e:
+                self.logger.error(f"Failed to import {module_name}.{function_name}: {e}")
+            except Exception as e:
+                self.logger.error(f"Error loading task config {task_config}: {e}")
+        
+        return tasks_config
