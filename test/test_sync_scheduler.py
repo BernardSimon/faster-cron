@@ -91,6 +91,19 @@ def test_sync_context_injection_supports_context_name_and_positional_ctx(sync_cr
     assert positional_task.state == TaskState.PENDING
 
 
+def test_sync_context_injection_supports_named_context_with_extra_args(sync_cron):
+    received = {}
+
+    def with_args(context, message):
+        received["task"] = (context["task_name"], message)
+
+    sync_cron.add_task("* * * * * *", with_args, args=("hello",))
+    context = {"scheduled_at": datetime.now(), "task_name": "manual"}
+    sync_cron._execute_task(sync_cron.tasks[0], context, args=("hello",), kwargs={})
+
+    assert received["task"] == ("manual", "hello")
+
+
 
 def test_sync_non_overlap_blocks_parallel_runs(sync_cron):
     starts: list[float] = []

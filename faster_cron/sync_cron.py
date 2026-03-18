@@ -29,6 +29,9 @@ class FasterCron:
         retry_delay: float = 5.0,
         on_error: Optional[Callable[[Exception, ExecutionRecord], None]] = None,
         wait_on_exit: bool = True,
+        enable_web_ui: bool = False,
+        web_host: str = "127.0.0.1",
+        web_port: int = 8000,
     ):
         self.tasks: List[Dict[str, Any]] = []
         self.task_registry: Dict[str, TaskInfo] = {}
@@ -40,6 +43,9 @@ class FasterCron:
         self.execution_history: List[ExecutionRecord] = []
         self.error_history: List[ExecutionRecord] = []
         self.wait_on_exit = wait_on_exit
+        self.enable_web_ui = enable_web_ui
+        self.web_host = web_host
+        self.web_port = web_port
 
         if custom_logger is not None:
             self.logger = custom_logger
@@ -67,6 +73,7 @@ class FasterCron:
         self._monitors: Dict[str, threading.Thread] = {}
         self._workers: Set[threading.Thread] = set()
         self._timers: Set[threading.Thread] = set()
+        self._web_admin_server = None
 
     def schedule(self, expression: str, allow_overlap: bool = True):
         """装饰器：注册周期性任务。"""
@@ -82,14 +89,22 @@ class FasterCron:
         expression: str,
         func: Callable,
         allow_overlap: bool = True,
+        args: Optional[Tuple[Any, ...]] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
     ) -> TaskInfo:
         """动态添加周期性任务。"""
+        normalized_args = tuple(args or ())
+        normalized_kwargs = dict(kwargs or {})
         task_info = TaskInfo(
             name=func.__name__,
             expression=expression,
             func=func,
             allow_overlap=allow_overlap,
             state=TaskState.PENDING,
+            task_args=normalized_args,
+            task_kwargs=normalized_kwargs,
+            func_module=getattr(func, "__module__", None),
+            func_qualname=getattr(func, "__qualname__", func.__name__),
         )
         task_data = {
             "type": "recurring",
@@ -97,6 +112,8 @@ class FasterCron:
             "func": func,
             "allow_overlap": allow_overlap,
             "name": func.__name__,
+            "args": normalized_args,
+            "kwargs": normalized_kwargs,
             "last_worker": None,
             "cancel_event": threading.Event(),
         }
@@ -108,6 +125,44 @@ class FasterCron:
         if self._running:
             self._start_monitor(task_data)
             self.logger.info(f"Added task '{func.__name__}' while scheduler running")
+
+        return task_info
+
+    def update_task(
+        self,
+        task_name: str,
+        *,
+        expression: Optional[str] = None,
+        allow_overlap: Optional[bool] = None,
+        args: Optional[Tuple[Any, ...]] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Optional[TaskInfo]:
+        task_info = self.task_registry.get(task_name)
+        if task_info is None:
+            return None
+
+        with self._lock:
+            task_data = next(
+                (task for task in self.tasks if task.get("name") == task_name and task.get("type") == "recurring"),
+                None,
+            )
+            if task_data is None:
+                return None
+
+            if expression is not None:
+                task_data["expression"] = expression
+                task_info.expression = expression
+            if allow_overlap is not None:
+                task_data["allow_overlap"] = allow_overlap
+                task_info.allow_overlap = allow_overlap
+            if args is not None:
+                normalized_args = tuple(args)
+                task_data["args"] = normalized_args
+                task_info.task_args = normalized_args
+            if kwargs is not None:
+                normalized_kwargs = dict(kwargs)
+                task_data["kwargs"] = normalized_kwargs
+                task_info.task_kwargs = normalized_kwargs
 
         return task_info
 
@@ -173,6 +228,36 @@ class FasterCron:
     def get_task(self, task_name: str) -> Optional[TaskInfo]:
         return self.task_registry.get(task_name)
 
+    def enable_web(self, host: Optional[str] = None, port: Optional[int] = None) -> bool:
+        """Enable web admin. Multiple calls won't start multiple servers."""
+        if host is not None:
+            self.web_host = host
+        if port is not None:
+            self.web_port = port
+
+        already_running = self._web_admin_server is not None
+        self.enable_web_ui = True
+        if self._running and not already_running:
+            self._start_web_admin_server()
+            return True
+        return not already_running
+
+    def disable_web(self, wait_timeout: Optional[float] = None) -> bool:
+        """Disable web admin and stop server if it is running."""
+        was_running = self._web_admin_server is not None
+        self.enable_web_ui = False
+        if was_running:
+            self._stop_web_admin_server(wait_timeout=wait_timeout)
+            return True
+        return False
+
+    # Backward-friendly alias for users who prefer camelCase naming.
+    def enableWeb(self, base_url: Optional[str] = None, port: Optional[int] = None) -> bool:
+        return self.enable_web(host=base_url, port=port)
+
+    def disableWeb(self, wait_timeout: Optional[float] = None) -> bool:
+        return self.disable_web(wait_timeout=wait_timeout)
+
     def _calculate_next_trigger(
         self,
         expression: str,
@@ -223,6 +308,9 @@ class FasterCron:
         self._running = True
         self._stop_event.clear()
 
+        if self.enable_web_ui:
+            self._start_web_admin_server()
+
         for task in list(self.tasks):
             if task.get("type") == "recurring":
                 self._start_monitor(task)
@@ -253,6 +341,7 @@ class FasterCron:
                     cancel_event.set()
 
         self._join_threads(wait_timeout=wait_timeout)
+        self._stop_web_admin_server(wait_timeout=wait_timeout)
         self.logger.info("Scheduler stopped")
 
     def _join_threads(self, wait_timeout: Optional[float] = None):
@@ -317,7 +406,7 @@ class FasterCron:
                 }
                 worker = threading.Thread(
                     target=self._execute_task,
-                    args=(task, context),
+                    args=(task, context, task.get("args", ()), task.get("kwargs", {})),
                     name=f"Worker-{task['name']}-{current_ts}",
                     daemon=True,
                 )
@@ -345,7 +434,25 @@ class FasterCron:
         parameters = list(signature.parameters.values())
 
         if "context" in signature.parameters:
-            call_kwargs.setdefault("context", context)
+            context_param = signature.parameters["context"]
+            positional = [
+                parameter
+                for parameter in parameters
+                if parameter.kind in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                )
+            ]
+            if (
+                context_param.kind
+                in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                and positional
+                and positional[0].name == "context"
+                and "context" not in call_kwargs
+            ):
+                args_list.insert(0, context)
+            else:
+                call_kwargs.setdefault("context", context)
         elif any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters):
             call_kwargs.setdefault("context", context)
         elif not args_list:
@@ -519,6 +626,10 @@ class FasterCron:
             func=func,
             allow_overlap=False,
             state=TaskState.PENDING,
+            task_args=tuple(args),
+            task_kwargs=dict(kwargs),
+            func_module=getattr(func, "__module__", None),
+            func_qualname=getattr(func, "__qualname__", func.__name__),
         )
         task_data = {
             "type": "one_shot",
@@ -604,6 +715,8 @@ class FasterCron:
             function_name = task_config.get("function")
             expression = task_config.get("expression")
             allow_overlap = task_config.get("allow_overlap", True)
+            args = task_config.get("args", [])
+            kwargs = task_config.get("kwargs", {})
 
             if not module_name or not function_name or not expression:
                 self.logger.error(f"Invalid task config, missing required fields: {task_config}")
@@ -616,8 +729,37 @@ class FasterCron:
                 self.logger.error(f"Failed to import {module_name}.{function_name}: {exc}")
                 continue
 
-            self.add_task(expression, func, allow_overlap=allow_overlap)
+            self.add_task(
+                expression,
+                func,
+                allow_overlap=allow_overlap,
+                args=tuple(args or ()),
+                kwargs=dict(kwargs or {}),
+            )
             loaded_count += 1
             self.logger.info(f"Loaded task '{function_name}' from {module_name}")
 
         return loaded_count
+
+    def _start_web_admin_server(self):
+        if self._web_admin_server is not None:
+            return
+
+        web_admin_module = importlib.import_module("faster_cron.web_admin")
+        WebAdminServer = web_admin_module.WebAdminServer
+
+        self._web_admin_server = WebAdminServer(
+            cron=self,
+            host=self.web_host,
+            port=self.web_port,
+            logger=self.logger,
+        )
+        self._web_admin_server.start_sync()
+        self.logger.info(f"Web admin started at http://{self.web_host}:{self.web_port}")
+
+    def _stop_web_admin_server(self, wait_timeout: Optional[float] = None):
+        if self._web_admin_server is None:
+            return
+        self._web_admin_server.stop_sync(wait_timeout=wait_timeout)
+        self._web_admin_server = None
+

@@ -34,6 +34,10 @@ class TaskInfo:
     func: Callable[..., Any]
     allow_overlap: bool
     state: TaskState
+    task_args: tuple = field(default_factory=tuple)
+    task_kwargs: Dict[str, Any] = field(default_factory=dict)
+    func_module: Optional[str] = None
+    func_qualname: Optional[str] = None
     retry_count: int = 0        # 当前重试次数
     last_execution: Optional[datetime] = None    # 上次执行时间
     last_result: Optional[str] = None            # 上次执行结果
@@ -45,8 +49,12 @@ class TaskInfo:
             "name": self.name,
             "expression": self.expression,
             "func_name": self.func.__name__,
+            "func_module": self.func_module or getattr(self.func, "__module__", None),
+            "func_qualname": self.func_qualname or getattr(self.func, "__qualname__", self.func.__name__),
             "allow_overlap": self.allow_overlap,
             "state": str(self.state),
+            "task_args": list(self.task_args),
+            "task_kwargs": self.task_kwargs,
             "retry_count": self.retry_count,
             "last_execution": self.last_execution.isoformat() if self.last_execution else None,
             "last_result": self.last_result,
