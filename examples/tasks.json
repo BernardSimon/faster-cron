@@ -1,32 +1,28 @@
 {
   "tasks": [
     {
-      "module": "my_app.backup",
-      "function": "nightly_backup",
-      "expression": "0 2 * * *",
-      "allow_overlap": false,
-      "priority": 5
+      "module": "faster_cron.example_tasks",
+      "function": "heartbeat",
+      "expression": "* * * * * *",
+      "allow_overlap": true
     },
     {
-      "module": "my_app.cleanup",
-      "function": "clean_temp_files",
-      "expression": "0 * * * *",
-      "allow_overlap": true,
-      "priority": 3
-    },
-    {
-      "module": "my_app.reports",
-      "function": "generate_weekly_report",
-      "expression": "0 9 * * 1",
-      "allow_overlap": false,
-      "priority": 4
-    },
-    {
-      "module": "my_app.monitoring",
+      "module": "faster_cron.example_tasks",
       "function": "health_check",
-      "expression": "* * * * *",
-      "allow_overlap": true,
-      "priority": 10
+      "expression": "*/2 * * * * *",
+      "allow_overlap": true
+    },
+    {
+      "module": "faster_cron.example_tasks",
+      "function": "clean_temp_files",
+      "expression": "*/3 * * * * *",
+      "allow_overlap": false
+    },
+    {
+      "module": "faster_cron.example_tasks",
+      "function": "nightly_backup",
+      "expression": "*/5 * * * * *",
+      "allow_overlap": false
     }
   ]
 }

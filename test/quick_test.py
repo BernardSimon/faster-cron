@@ -1,43 +1,46 @@
 #!/usr/bin/env python3
-"""Simple quick test for FasterCron"""
-import sys
-sys.path.insert(0, '..')
-
-print("Testing...")
-
-# Test imports
-from faster_cron import FasterCron, AsyncFasterCron
-print("✓ Import OK")
-
-# Test sync
-cron = FasterCron()
-assert cron.tasks == []
-print("✓ Sync init OK")
-
-@cron.schedule('* * * * *')
-def t(ctx): pass
-assert len(cron.tasks) == 1
-print("✓ Add task OK")
-
-assert hasattr(cron, 'run')
-print("✓ Has run method")
-
-assert hasattr(cron, 'stop')
-print("✓ Has stop method")
-
-# Test async
-async def test_async():
-    cron = AsyncFasterCron()
-    assert cron is not None
-    
-    @cron.schedule('* * * * *')
-    async def at(ctx): pass
-    assert len(cron.tasks) == 1
-    
-    await cron.start()
-    print("✓ Async start OK")
+"""Quick smoke test for FasterCron."""
 
 import asyncio
-asyncio.run(test_async())
+import threading
+import time
 
-print("\nAll basic tests passed!")
+from faster_cron import AsyncFasterCron, FasterCron
+
+
+async def async_smoke():
+    cron = AsyncFasterCron(log_level=50)
+    seen = []
+
+    @cron.schedule("* * * * * *")
+    async def tick(ctx):
+        seen.append(ctx["task_name"])
+
+    runner = asyncio.create_task(cron.run())
+    await asyncio.sleep(1.2)
+    await cron.stop()
+    await runner
+    assert seen, "async scheduler did not run"
+
+
+def sync_smoke():
+    cron = FasterCron(log_level=50)
+    seen = []
+
+    @cron.schedule("* * * * * *")
+    def tick(ctx):
+        seen.append(ctx["task_name"])
+
+    thread = threading.Thread(target=cron.run, kwargs={"wait_on_exit": False}, daemon=True)
+    thread.start()
+    time.sleep(1.2)
+    cron.stop(wait_timeout=2)
+    thread.join(timeout=2)
+    assert seen, "sync scheduler did not run"
+
+
+if __name__ == "__main__":
+    sync_smoke()
+    asyncio.run(async_smoke())
+    print("quick smoke test passed")
+
