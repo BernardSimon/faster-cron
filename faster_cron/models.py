@@ -7,7 +7,7 @@ FasterCron v2.0 - 核心数据模型
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Optional, List, Dict, Any
+from typing import Callable, Optional, Dict, Any
 
 
 class TaskState(Enum):
@@ -34,7 +34,6 @@ class TaskInfo:
     func: Callable[..., Any]
     allow_overlap: bool
     state: TaskState
-    priority: int = 0           # 优先级（越高越优先）
     retry_count: int = 0        # 当前重试次数
     last_execution: Optional[datetime] = None    # 上次执行时间
     last_result: Optional[str] = None            # 上次执行结果
@@ -48,7 +47,6 @@ class TaskInfo:
             "func_name": self.func.__name__,
             "allow_overlap": self.allow_overlap,
             "state": str(self.state),
-            "priority": self.priority,
             "retry_count": self.retry_count,
             "last_execution": self.last_execution.isoformat() if self.last_execution else None,
             "last_result": self.last_result,
@@ -65,7 +63,7 @@ class ExecutionRecord:
     """
     task_name: str
     scheduled_at: datetime
-    started_at: datetime
+    started_at: Optional[datetime]
     finished_at: Optional[datetime] = None
     success: bool = False
     error_message: Optional[str] = None
@@ -87,7 +85,7 @@ class ExecutionRecord:
         return {
             "task_name": self.task_name,
             "scheduled_at": self.scheduled_at.isoformat(),
-            "started_at": self.started_at.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "success": self.success,
             "error_message": self.error_message,

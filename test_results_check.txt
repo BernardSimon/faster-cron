@@ -1,3 +1,0 @@
-Test verification completed.
-All test files created and ready.
-Run: python3 test/run_and_save.py
