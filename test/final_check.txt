@@ -1,0 +1,5 @@
+# Manual verification results
+
+Let me check if the files exist:
+- faster_cron/sync_cron.py should have run() method
+- test/quick_test.py should be able to import and run

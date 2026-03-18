@@ -1,0 +1,4 @@
+✓ Import OK
+✓ Sync init OK
+✓ Add task OK
+✗ Sync test error: Missing run method
