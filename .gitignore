@@ -14,6 +14,11 @@ venv/
 # IDE
 .idea/
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # OS
 .DS_Store
 

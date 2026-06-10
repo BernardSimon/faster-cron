@@ -133,6 +133,10 @@ def create_web_app(cron: Any):
         records = [_serialize_record(record) for record in cron.error_history[-max(limit, 1):]]
         return {"records": records}
 
+    @app.get("/api/stats")
+    async def get_stats() -> Dict[str, Any]:
+        return cron.get_stats().to_dict()
+
     return app
 
 

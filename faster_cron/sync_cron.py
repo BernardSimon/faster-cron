@@ -1,5 +1,5 @@
 """
-jFasterCron: 同步多线程定时任务调度器
+FasterCron: 同步多线程定时任务调度器
 """
 
 import datetime
@@ -10,13 +10,13 @@ import logging
 import threading
 import time
 from datetime import timedelta
-from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from .base import SchedulerMixin
 from .models import ExecutionRecord, TaskInfo, TaskState
 
 
-class FasterCron:
+class FasterCron(SchedulerMixin):
     """同步多线程定时任务调度器。"""
 
     def __init__(
@@ -33,56 +33,29 @@ class FasterCron:
         web_host: str = "127.0.0.1",
         web_port: int = 8000,
     ):
-        self.tasks: List[Dict[str, Any]] = []
-        self.task_registry: Dict[str, TaskInfo] = {}
-        self.paused_tasks: Set[str] = set()
+        self._init_shared(
+            log_level=log_level,
+            log_format=log_format,
+            log_file=log_file,
+            custom_logger=custom_logger,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            on_error=on_error,
+            enable_web_ui=enable_web_ui,
+            web_host=web_host,
+            web_port=web_port,
+            logger_prefix="Sync",
+        )
 
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.on_error = on_error
-        self.execution_history: List[ExecutionRecord] = []
-        self.error_history: List[ExecutionRecord] = []
+        # 引擎特有字段
         self.wait_on_exit = wait_on_exit
-        self.enable_web_ui = enable_web_ui
-        self.web_host = web_host
-        self.web_port = web_port
-
-        if custom_logger is not None:
-            self.logger = custom_logger
-        else:
-            instance_id = id(self)
-            self.logger = logging.getLogger(f"FasterCron.Sync_{instance_id}")
-            self.logger.setLevel(log_level)
-
-            if not self.logger.handlers:
-                console_handler = logging.StreamHandler()
-                console_handler.setFormatter(logging.Formatter(log_format))
-                self.logger.addHandler(console_handler)
-
-                if log_file:
-                    try:
-                        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-                        file_handler.setFormatter(logging.Formatter(log_format))
-                        self.logger.addHandler(file_handler)
-                    except Exception as exc:
-                        print(f"⚠️ 无法创建日志文件 {log_file}: {exc}")
-
-        self._running = False
         self._stop_event = threading.Event()
         self._lock = threading.RLock()
         self._monitors: Dict[str, threading.Thread] = {}
         self._workers: Set[threading.Thread] = set()
         self._timers: Set[threading.Thread] = set()
-        self._web_admin_server = None
 
-    def schedule(self, expression: str, allow_overlap: bool = True):
-        """装饰器：注册周期性任务。"""
-
-        def decorator(func: Callable):
-            self.add_task(expression, func, allow_overlap=allow_overlap)
-            return func
-
-        return decorator
+    # ── 任务管理（sync 特有实现，含锁保护） ─────────────────────
 
     def add_task(
         self,
@@ -186,47 +159,7 @@ class FasterCron:
         self.logger.info(f"Removed task '{task_name}'")
         return True
 
-    def pause_task(self, task_name: str) -> bool:
-        if task_name not in self.task_registry:
-            return False
-
-        self.task_registry[task_name].state = TaskState.PAUSED
-        self.paused_tasks.add(task_name)
-        self.logger.info(f"Paused task '{task_name}'")
-        return True
-
-    def resume_task(self, task_name: str) -> bool:
-        if task_name not in self.task_registry:
-            return False
-
-        self.task_registry[task_name].state = TaskState.PENDING
-        self.paused_tasks.discard(task_name)
-        self.logger.info(f"Resumed task '{task_name}'")
-        return True
-
-    def disable_task(self, task_name: str) -> bool:
-        if task_name not in self.task_registry:
-            return False
-
-        self.task_registry[task_name].state = TaskState.DISABLED
-        self.paused_tasks.add(task_name)
-        self.logger.info(f"Disabled task '{task_name}'")
-        return True
-
-    def enable_task(self, task_name: str) -> bool:
-        if task_name not in self.task_registry:
-            return False
-
-        self.task_registry[task_name].state = TaskState.PENDING
-        self.paused_tasks.discard(task_name)
-        self.logger.info(f"Enabled task '{task_name}'")
-        return True
-
-    def list_tasks(self) -> List[TaskInfo]:
-        return list(self.task_registry.values())
-
-    def get_task(self, task_name: str) -> Optional[TaskInfo]:
-        return self.task_registry.get(task_name)
+    # ── 引擎生命周期 ─────────────────────────────────────────
 
     def enable_web(self, host: Optional[str] = None, port: Optional[int] = None) -> bool:
         """Enable web admin. Multiple calls won't start multiple servers."""
@@ -251,36 +184,11 @@ class FasterCron:
             return True
         return False
 
-    # Backward-friendly alias for users who prefer camelCase naming.
     def enableWeb(self, base_url: Optional[str] = None, port: Optional[int] = None) -> bool:
         return self.enable_web(host=base_url, port=port)
 
     def disableWeb(self, wait_timeout: Optional[float] = None) -> bool:
         return self.disable_web(wait_timeout=wait_timeout)
-
-    def _calculate_next_trigger(
-        self,
-        expression: str,
-        from_time: Optional[datetime.datetime] = None,
-    ) -> datetime.datetime:
-        if from_time is None:
-            from_time = datetime.datetime.now()
-
-        candidate = from_time.replace(microsecond=0) + timedelta(seconds=1)
-        max_iterations = 366 * 24 * 60 * 60
-
-        for _ in range(max_iterations):
-            if self._is_time_match(expression, candidate):
-                return candidate
-            candidate += timedelta(seconds=1)
-
-        raise ValueError(f"No trigger time found within 1 year for expression: {expression}")
-
-    @staticmethod
-    def _is_time_match(expression: str, now: datetime.datetime) -> bool:
-        from .base import CronBase
-
-        return CronBase.is_time_match(expression, now)
 
     def _start_monitor(self, task: Dict[str, Any]):
         if task.get("type") != "recurring":
@@ -421,54 +329,6 @@ class FasterCron:
 
         self._monitors.pop(task["name"], None)
 
-    def _prepare_invocation(
-        self,
-        func: Callable,
-        context: Dict[str, Any],
-        args: Tuple[Any, ...],
-        kwargs: Optional[Dict[str, Any]],
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-        args_list = list(args)
-        call_kwargs = dict(kwargs or {})
-        signature = inspect.signature(func)
-        parameters = list(signature.parameters.values())
-
-        if "context" in signature.parameters:
-            context_param = signature.parameters["context"]
-            positional = [
-                parameter
-                for parameter in parameters
-                if parameter.kind in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                )
-            ]
-            if (
-                context_param.kind
-                in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-                and positional
-                and positional[0].name == "context"
-                and "context" not in call_kwargs
-            ):
-                args_list.insert(0, context)
-            else:
-                call_kwargs.setdefault("context", context)
-        elif any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters):
-            call_kwargs.setdefault("context", context)
-        elif not args_list:
-            positional = [
-                parameter
-                for parameter in parameters
-                if parameter.kind in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                )
-            ]
-            if positional and positional[0].name not in call_kwargs:
-                args_list.insert(0, context)
-
-        return tuple(args_list), call_kwargs
-
     def _call_func(
         self,
         func: Callable,
@@ -518,7 +378,6 @@ class FasterCron:
                         execution_record.finished_at - execution_record.started_at
                     ).total_seconds()
                     self.execution_history.append(execution_record)
-                    self.execution_history = self.execution_history[-1000:]
 
                     if task_info is not None:
                         task_info.retry_count = 0
@@ -548,7 +407,6 @@ class FasterCron:
                     execution_record.finished_at - execution_record.started_at
                 ).total_seconds()
                 self.error_history.append(execution_record)
-                self.error_history = self.error_history[-100:]
 
                 if self.on_error and last_error is not None:
                     try:
@@ -567,50 +425,6 @@ class FasterCron:
                     self.tasks = [task_data for task_data in self.tasks if task_data is not task]
         finally:
             self._workers.discard(current_thread)
-
-    def once_in(
-        self,
-        seconds: float,
-        func: Optional[Callable] = None,
-        *,
-        args: Optional[Tuple[Any, ...]] = None,
-        kwargs: Optional[Dict[str, Any]] = None,
-    ):
-        target_time = datetime.datetime.now() + timedelta(seconds=seconds)
-        return self.run_at(
-            target_time,
-            func,
-            args=args,
-            kwargs=kwargs,
-            execution_type="one_time_delayed",
-        )
-
-    def run_at(
-        self,
-        target_time: datetime.datetime,
-        func: Optional[Callable] = None,
-        *,
-        args: Optional[Tuple[Any, ...]] = None,
-        kwargs: Optional[Dict[str, Any]] = None,
-        execution_type: str = "one_time_scheduled",
-    ):
-        if func is not None:
-            self._schedule_one_shot(
-                target_time,
-                func,
-                args=args or (),
-                kwargs=kwargs or {},
-                execution_type=execution_type,
-            )
-            return func
-
-        return partial(
-            self.run_at,
-            target_time,
-            args=args,
-            kwargs=kwargs,
-            execution_type=execution_type,
-        )
 
     def _schedule_one_shot(
         self,
@@ -687,60 +501,6 @@ class FasterCron:
         finally:
             self._timers.discard(current_thread)
 
-    def load_from_yaml(self, filepath: str) -> int:
-        try:
-            yaml = importlib.import_module("yaml")
-        except ImportError as exc:
-            raise ImportError(
-                "PyYAML is required for load_from_yaml(). Install 'pyyaml' or 'faster-cron[yaml]'."
-            ) from exc
-
-        with open(filepath, "r", encoding="utf-8") as handle:
-            config = yaml.safe_load(handle) or {}
-        return self._load_tasks(config)
-
-    def load_from_json(self, filepath: str) -> int:
-        with open(filepath, "r", encoding="utf-8") as handle:
-            config = json.load(handle)
-        return self._load_tasks(config)
-
-    def _load_tasks(self, config: Dict[str, Any]) -> int:
-        tasks_config = config.get("tasks", [])
-        if not isinstance(tasks_config, list):
-            raise ValueError("'tasks' must be a list in configuration")
-
-        loaded_count = 0
-        for task_config in tasks_config:
-            module_name = task_config.get("module")
-            function_name = task_config.get("function")
-            expression = task_config.get("expression")
-            allow_overlap = task_config.get("allow_overlap", True)
-            args = task_config.get("args", [])
-            kwargs = task_config.get("kwargs", {})
-
-            if not module_name or not function_name or not expression:
-                self.logger.error(f"Invalid task config, missing required fields: {task_config}")
-                continue
-
-            try:
-                module = importlib.import_module(module_name)
-                func = getattr(module, function_name)
-            except (ImportError, AttributeError) as exc:
-                self.logger.error(f"Failed to import {module_name}.{function_name}: {exc}")
-                continue
-
-            self.add_task(
-                expression,
-                func,
-                allow_overlap=allow_overlap,
-                args=tuple(args or ()),
-                kwargs=dict(kwargs or {}),
-            )
-            loaded_count += 1
-            self.logger.info(f"Loaded task '{function_name}' from {module_name}")
-
-        return loaded_count
-
     def _start_web_admin_server(self):
         if self._web_admin_server is not None:
             return
@@ -762,4 +522,3 @@ class FasterCron:
             return
         self._web_admin_server.stop_sync(wait_timeout=wait_timeout)
         self._web_admin_server = None
-

@@ -1,7 +1,0 @@
-✓ Import OK
-✓ Sync init OK
-✓ Add task OK
-✓ Has run method
-✓ Has stop method
-✓ Async scheduler OK
-✓ Unit tests passed (31 passed)

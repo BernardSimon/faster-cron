@@ -4,7 +4,7 @@ FasterCron 是一个轻量但功能完整的 Python 定时任务调度库，提�
 - `AsyncFasterCron`（基于 `asyncio`）
 - `FasterCron`（基于 `threading`）
 
-支持周期任务、一次性任务、重试机制、动态任务管理、配置文件加载、执行历史与错误历史。
+支持周期任务、一次性任务、重试机制、动态任务管理、配置文件加载、执行历史与错误历史、运行时统计。
 
 ---
 
@@ -35,7 +35,7 @@ pip install faster-cron
 可选依赖（YAML 配置加载）：
 
 ```bash
-pip install pyyaml
+pip install "faster-cron[yaml]"
 ```
 
 可选依赖（Web 管理后台）：
@@ -50,7 +50,6 @@ pip install "faster-cron[web]"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pip install pyyaml
 ```
 
 ### 基础用法
@@ -126,22 +125,6 @@ cron.add_task("*/10 * * * * *", dynamic_task, allow_overlap=False)
 cron.update_task("dynamic_task", expression="*/15 * * * * *", kwargs={"env": "prod"})
 print([task.name for task in cron.list_tasks()])
 ```
-
-### 7. 可选 Web 管理后台（FastAPI + Tailwind）
-
-实例化时开启 `enable_web_ui=True` 即可启用在线管理页面，支持任务增删改、暂停/恢复、参数查看和执行记录查看。
-
-```python
-from faster_cron import FasterCron
-
-cron = FasterCron(
-    enable_web_ui=True,
-    web_host="127.0.0.1",   # 可选，默认 127.0.0.1
-    web_port=8000,           # 可选，默认 8000
-)
-```
-
-启动调度器后访问：`http://127.0.0.1:8000`
 
 ### 2. 重试机制与错误回调
 
@@ -235,6 +218,44 @@ tasks:
     expression: "* * * * * *"
     allow_overlap: true
 ```
+
+### 7. 运行时统计（v2.3.0 新增）
+
+通过 `get_stats()` 获取调度器运行统计信息：
+
+```python
+stats = cron.get_stats()
+print(stats.to_dict())
+# {
+#   "total_tasks": 3,
+#   "active_tasks": 2,
+#   "paused_tasks": 1,
+#   "disabled_tasks": 0,
+#   "total_executions": 150,
+#   "successful_executions": 145,
+#   "failed_executions": 5,
+#   "error_history_size": 5,
+#   "success_rate": 96.67
+# }
+```
+
+Web 管理后台也提供 `/api/stats` 端点。
+
+### 8. 可选 Web 管理后台（FastAPI + Tailwind）
+
+实例化时开启 `enable_web_ui=True` 即可启用在线管理页面，支持任务增删改、暂停/恢复、参数查看和执行记录查看。
+
+```python
+from faster_cron import FasterCron
+
+cron = FasterCron(
+    enable_web_ui=True,
+    web_host="127.0.0.1",   # 可选，默认 127.0.0.1
+    web_port=8000,           # 可选，默认 8000
+)
+```
+
+启动调度器后访问：`http://127.0.0.1:8000`
 
 ---
 
@@ -341,7 +362,7 @@ class TaskInfo:
 
 实现细节：
 - 周字段中 `7` 等价于 `0`（周日）
-- 当“日”和“周”都被限制时，采用标准 Cron 的 OR 语义
+- 当"日"和"周"都被限制时，采用标准 Cron 的 OR 语义
 
 常见示例：
 - `* * * * * *`：每秒
@@ -379,8 +400,10 @@ pytest test/ -v
 python test/quick_test.py
 ```
 
-当前单测覆盖：
-- Cron 匹配逻辑
+当前单测覆盖（80+ 用例）：
+- Cron 匹配逻辑与边界情况
+- `_calculate_next_trigger` 字段约束算法
+- `_expand_field` 字段展开
 - 异步/同步生命周期
 - 动态任务管理
 - 暂停/恢复/禁用/启用
@@ -388,6 +411,9 @@ python test/quick_test.py
 - 一次性任务与参数传递
 - JSON/YAML 配置加载
 - 公共 API 导出
+- 并发安全
+- `SchedulerStats` 统计
+- Web 管理后台 CRUD
 
 ---
 
@@ -395,33 +421,18 @@ python test/quick_test.py
 
 ```text
 faster_cron/
-  __init__.py
-  async_cron.py
-  sync_cron.py
-  web_admin.py
-  base.py
-  models.py
-  example_tasks.py
+  __init__.py          # 公共 API 导出
+  base.py              # CronBase（表达式解析）+ SchedulerMixin（共享逻辑）
+  async_cron.py        # AsyncFasterCron 引擎
+  sync_cron.py         # FasterCron 引擎
+  models.py            # TaskInfo, TaskState, ExecutionRecord, SchedulerStats
+  web_admin.py         # 可选 Web 管理后台
+  example_tasks.py     # 示例任务
+  py.typed             # PEP 561 类型标记
 
-demo/
-  v2_demo_async.py
-  v2_demo_sync.py
-  v2_demo_config.py
-  v2_demo_run.py
-  v2_demo_one_shot.py
-  v2_demo_management.py
-  v2_demo_web.py
-  v2_demo_web_async.py
-
-test/
-  test_cron_logic.py
-  test_async_scheduler.py
-  test_sync_scheduler.py
-  test_one_shot.py
-  test_retry_and_history.py
-  test_config_loading.py
-  test_public_api.py
-  test_logging.py
+demo/                  # 演示脚本
+test/                  # 测试套件（80+ 用例）
+examples/              # 配置文件示例
 ```
 
 ---

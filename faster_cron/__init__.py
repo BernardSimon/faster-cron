@@ -1,17 +1,18 @@
 """
 FasterCron: 一个轻量、直观、支持异步与同步双模式的定时任务调度器。
-v2.2.0 - Optional Web Admin UI, i18n, Runtime Web Toggle, Paginated History
+v2.3.0 - Architecture Refactoring, Performance Improvements, SchedulerStats
 """
 
 from .async_cron import AsyncFasterCron
 from .sync_cron import FasterCron
-from .models import TaskInfo, TaskState, ExecutionRecord
+from .models import ExecutionRecord, SchedulerStats, TaskInfo, TaskState
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __all__ = [
     "AsyncFasterCron",
     "FasterCron",
+    "ExecutionRecord",
+    "SchedulerStats",
     "TaskInfo",
     "TaskState",
-    "ExecutionRecord"
 ]

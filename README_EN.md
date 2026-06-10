@@ -4,7 +4,7 @@ FasterCron is a lightweight but feature-complete Python scheduler with two mirro
 - `AsyncFasterCron` (based on `asyncio`)
 - `FasterCron` (based on `threading`)
 
-It supports recurring cron tasks, one-shot tasks, retry handling, runtime task management, config loading, execution history, and error history.
+It supports recurring cron tasks, one-shot tasks, retry handling, runtime task management, config loading, execution history, error history, and runtime statistics.
 
 ---
 
@@ -35,7 +35,7 @@ pip install faster-cron
 Optional dependency (YAML config loading):
 
 ```bash
-pip install pyyaml
+pip install "faster-cron[yaml]"
 ```
 
 Optional dependency (Web admin UI):
@@ -50,7 +50,6 @@ Development/test setup:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pip install pyyaml
 ```
 
 ### Basic usage
@@ -126,22 +125,6 @@ cron.add_task("*/10 * * * * *", dynamic_task, allow_overlap=False)
 cron.update_task("dynamic_task", expression="*/15 * * * * *", kwargs={"env": "prod"})
 print([task.name for task in cron.list_tasks()])
 ```
-
-### 7. Optional web admin UI (FastAPI + Tailwind)
-
-Enable `enable_web_ui=True` in constructor to launch a lightweight web page for task CRUD, pause/resume, parameter inspection/editing, and execution history.
-
-```python
-from faster_cron import FasterCron
-
-cron = FasterCron(
-    enable_web_ui=True,
-    web_host="127.0.0.1",   # optional, default 127.0.0.1
-    web_port=8000,           # optional, default 8000
-)
-```
-
-After starting the scheduler, open: `http://127.0.0.1:8000`
 
 ### 2. Retry + error callback
 
@@ -235,6 +218,44 @@ tasks:
     expression: "* * * * * *"
     allow_overlap: true
 ```
+
+### 7. Runtime statistics (new in v2.3.0)
+
+Get scheduler runtime statistics via `get_stats()`:
+
+```python
+stats = cron.get_stats()
+print(stats.to_dict())
+# {
+#   "total_tasks": 3,
+#   "active_tasks": 2,
+#   "paused_tasks": 1,
+#   "disabled_tasks": 0,
+#   "total_executions": 150,
+#   "successful_executions": 145,
+#   "failed_executions": 5,
+#   "error_history_size": 5,
+#   "success_rate": 96.67
+# }
+```
+
+The web admin also exposes a `/api/stats` endpoint.
+
+### 8. Optional web admin UI (FastAPI + Tailwind)
+
+Enable `enable_web_ui=True` in constructor to launch a lightweight web page for task CRUD, pause/resume, parameter inspection/editing, and execution history.
+
+```python
+from faster_cron import FasterCron
+
+cron = FasterCron(
+    enable_web_ui=True,
+    web_host="127.0.0.1",   # optional, default 127.0.0.1
+    web_port=8000,           # optional, default 8000
+)
+```
+
+After starting the scheduler, open: `http://127.0.0.1:8000`
 
 ---
 
@@ -379,15 +400,20 @@ pytest test/ -v
 python test/quick_test.py
 ```
 
-Current unit coverage includes:
-- cron matching logic
-- async/sync lifecycle
-- dynamic task management
-- pause/resume/disable/enable
-- retry/error callback/history
-- one-shot tasks and argument passing
+Current unit coverage (80+ test cases):
+- Cron matching logic and edge cases
+- `_calculate_next_trigger` field-constrained algorithm
+- `_expand_field` field expansion
+- Async/sync lifecycle
+- Dynamic task management
+- Pause/resume/disable/enable
+- Retry/error callback
+- One-shot tasks and argument passing
 - JSON/YAML config loading
-- public API exports
+- Public API exports
+- Concurrent safety
+- `SchedulerStats` statistics
+- Web admin CRUD
 
 ---
 
@@ -395,33 +421,18 @@ Current unit coverage includes:
 
 ```text
 faster_cron/
-  __init__.py
-  async_cron.py
-  sync_cron.py
-  web_admin.py
-  base.py
-  models.py
-  example_tasks.py
+  __init__.py          # Public API exports
+  base.py              # CronBase (expression parsing) + SchedulerMixin (shared logic)
+  async_cron.py        # AsyncFasterCron engine
+  sync_cron.py         # FasterCron engine
+  models.py            # TaskInfo, TaskState, ExecutionRecord, SchedulerStats
+  web_admin.py         # Optional web admin UI
+  example_tasks.py     # Example tasks
+  py.typed             # PEP 561 type marker
 
-demo/
-  v2_demo_async.py
-  v2_demo_sync.py
-  v2_demo_config.py
-  v2_demo_run.py
-  v2_demo_one_shot.py
-  v2_demo_management.py
-  v2_demo_web.py
-  v2_demo_web_async.py
-
-test/
-  test_cron_logic.py
-  test_async_scheduler.py
-  test_sync_scheduler.py
-  test_one_shot.py
-  test_retry_and_history.py
-  test_config_loading.py
-  test_public_api.py
-  test_logging.py
+demo/                  # Demo scripts
+test/                  # Test suite (80+ cases)
+examples/              # Config file examples
 ```
 
 ---
@@ -431,10 +442,10 @@ test/
 Issues and pull requests are welcome.
 
 Suggested workflow:
-1. create a feature branch
-2. update code and tests
-3. run `pytest test/ -v`
-4. open a PR
+1. Create a feature branch
+2. Update code and tests
+3. Run `pytest test/ -v`
+4. Open a PR
 
 ---
 
