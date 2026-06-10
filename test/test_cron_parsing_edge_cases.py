@@ -79,7 +79,20 @@ class TestExpandField:
         assert CronBase._expand_field("*", 1, 12) == list(range(1, 13))
 
     def test_step_pattern(self):
-        assert CronBase._expand_field("*/5", 0, 59) == [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+        assert CronBase._expand_field("*/5", 0, 59) == [
+            0,
+            5,
+            10,
+            15,
+            20,
+            25,
+            30,
+            35,
+            40,
+            45,
+            50,
+            55,
+        ]
 
     def test_range_with_step(self):
         assert CronBase._expand_field("1-10/2", 0, 59) == [1, 3, 5, 7, 9]

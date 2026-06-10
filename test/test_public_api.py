@@ -25,4 +25,3 @@ def test_sync_and_async_expose_run_aliases():
 def test_get_stats_is_available():
     assert hasattr(FasterCron(), "get_stats")
     assert hasattr(AsyncFasterCron(), "get_stats")
-

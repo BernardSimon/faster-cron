@@ -8,7 +8,6 @@ import pytest
 from faster_cron import AsyncFasterCron, FasterCron
 
 
-
 def test_sync_load_from_json_uses_real_repo_module(tmp_path: Path):
     config = {
         "tasks": [
@@ -67,7 +66,6 @@ async def test_async_load_from_json_skips_invalid_entries(tmp_path: Path):
     assert [task.name for task in cron.list_tasks()] == ["heartbeat"]
 
 
-
 def test_load_from_yaml_handles_optional_dependency(tmp_path: Path):
     yaml_content = """
 tasks:
@@ -90,9 +88,7 @@ tasks:
         assert cron.get_task("heartbeat") is not None
 
 
-
 def test_invalid_tasks_structure_raises_value_error():
     cron = FasterCron(log_level=50)
     with pytest.raises(ValueError):
         cron._load_tasks({"tasks": {"not": "a list"}})
-

@@ -4,8 +4,8 @@ v2.3.0 - Architecture Refactoring, Performance Improvements, SchedulerStats
 """
 
 from .async_cron import AsyncFasterCron
-from .sync_cron import FasterCron
 from .models import ExecutionRecord, SchedulerStats, TaskInfo, TaskState
+from .sync_cron import FasterCron
 
 __version__ = "2.3.0"
 __all__ = [

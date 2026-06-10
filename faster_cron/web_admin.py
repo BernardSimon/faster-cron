@@ -1,7 +1,7 @@
 import asyncio
 import importlib
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 
 def _require_web_dependencies():
@@ -35,14 +35,15 @@ def _safe_value(value: Any) -> Any:
 
 
 def _serialize_task(task_info: Any) -> Dict[str, Any]:
-    payload = task_info.to_dict()
+    payload: Dict[str, Any] = task_info.to_dict()
     payload["task_args"] = _safe_value(payload.get("task_args", []))
     payload["task_kwargs"] = _safe_value(payload.get("task_kwargs", {}))
     return payload
 
 
 def _serialize_record(record: Any) -> Dict[str, Any]:
-    return record.to_dict()
+    result: Dict[str, Any] = record.to_dict()
+    return result
 
 
 def _import_task_callable(module_name: str, function_name: str):
@@ -52,9 +53,11 @@ def _import_task_callable(module_name: str, function_name: str):
 
 
 def create_web_app(cron: Any):
-    FastAPI, HTTPException, HTMLResponse, BaseModel, Body, Field, _ = _require_web_dependencies()
+    FastAPI, HTTPException, HTMLResponse, BaseModel, Body, Field, _ = (
+        _require_web_dependencies()
+    )
 
-    class CreateTaskRequest(BaseModel):
+    class CreateTaskRequest(BaseModel):  # type: ignore[misc,valid-type]
         expression: str
         module: str
         function: str
@@ -62,7 +65,7 @@ def create_web_app(cron: Any):
         args: List[Any] = Field(default_factory=list)
         kwargs: Dict[str, Any] = Field(default_factory=dict)
 
-    class UpdateTaskRequest(BaseModel):
+    class UpdateTaskRequest(BaseModel):  # type: ignore[misc,valid-type]
         expression: Optional[str] = None
         allow_overlap: Optional[bool] = None
         args: Optional[List[Any]] = None
@@ -96,7 +99,9 @@ def create_web_app(cron: Any):
         return _serialize_task(task_info)
 
     @app.put("/api/tasks/{task_name}")
-    async def update_task(task_name: str, payload: UpdateTaskRequest = Body(...)) -> Dict[str, Any]:
+    async def update_task(
+        task_name: str, payload: UpdateTaskRequest = Body(...)
+    ) -> Dict[str, Any]:
         updated = cron.update_task(
             task_name,
             expression=payload.expression,
@@ -125,24 +130,33 @@ def create_web_app(cron: Any):
 
     @app.get("/api/history")
     async def execution_history(limit: int = 100) -> Dict[str, Any]:
-        records = [_serialize_record(record) for record in cron.execution_history[-max(limit, 1):]]
+        records = [
+            _serialize_record(record)
+            for record in list(cron.execution_history)[-max(limit, 1) :]
+        ]
         return {"records": records}
 
     @app.get("/api/errors")
     async def error_history(limit: int = 100) -> Dict[str, Any]:
-        records = [_serialize_record(record) for record in cron.error_history[-max(limit, 1):]]
+        records = [
+            _serialize_record(record)
+            for record in list(cron.error_history)[-max(limit, 1) :]
+        ]
         return {"records": records}
 
     @app.get("/api/stats")
     async def get_stats() -> Dict[str, Any]:
-        return cron.get_stats().to_dict()
+        result: Dict[str, Any] = cron.get_stats().to_dict()
+        return result
 
     return app
 
 
 class _NoSignalUvicornServer:
     def __init__(self, uvicorn_module, app, host: str, port: int):
-        config = uvicorn_module.Config(app=app, host=host, port=port, log_level="warning")
+        config = uvicorn_module.Config(
+            app=app, host=host, port=port, log_level="warning"
+        )
 
         class _Server(uvicorn_module.Server):
             def install_signal_handlers(self):
@@ -168,12 +182,16 @@ class WebAdminServer:
         if self._thread and self._thread.is_alive():
             return
 
-        self._runner = _NoSignalUvicornServer(self._uvicorn, self._app, self._host, self._port)
+        self._runner = _NoSignalUvicornServer(
+            self._uvicorn, self._app, self._host, self._port
+        )
 
         def run_server():
             self._runner.server.run()
 
-        self._thread = threading.Thread(target=run_server, name="FasterCronWebAdmin", daemon=True)
+        self._thread = threading.Thread(
+            target=run_server, name="FasterCronWebAdmin", daemon=True
+        )
         self._thread.start()
 
     def stop_sync(self, wait_timeout: Optional[float] = None):
@@ -191,8 +209,12 @@ class WebAdminServer:
         if self._serve_task and not self._serve_task.done():
             return
 
-        self._runner = _NoSignalUvicornServer(self._uvicorn, self._app, self._host, self._port)
-        self._serve_task = asyncio.create_task(self._runner.server.serve(), name="faster-cron-web-admin")
+        self._runner = _NoSignalUvicornServer(
+            self._uvicorn, self._app, self._host, self._port
+        )
+        self._serve_task = asyncio.create_task(
+            self._runner.server.serve(), name="faster-cron-web-admin"
+        )
         await asyncio.sleep(0)
 
     async def stop_async(self):
@@ -803,4 +825,3 @@ def _render_index_page() -> str:
   </script>
 </body>
 </html>"""
-

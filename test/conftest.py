@@ -21,4 +21,3 @@ def sync_cron() -> FasterCron:
 @pytest.fixture
 def async_cron() -> AsyncFasterCron:
     return AsyncFasterCron(log_level=logging.CRITICAL, retry_delay=0.01)
-

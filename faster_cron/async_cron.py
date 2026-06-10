@@ -107,7 +107,11 @@ class AsyncFasterCron(SchedulerMixin):
             return None
 
         task_data = next(
-            (task for task in self.tasks if task.get("name") == task_name and task.get("type") == "recurring"),
+            (
+                task
+                for task in self.tasks
+                if task.get("name") == task_name and task.get("type") == "recurring"
+            ),
             None,
         )
         if task_data is None:
@@ -157,7 +161,9 @@ class AsyncFasterCron(SchedulerMixin):
 
     # ── 引擎生命周期 ─────────────────────────────────────────
 
-    async def enable_web(self, host: Optional[str] = None, port: Optional[int] = None) -> bool:
+    async def enable_web(
+        self, host: Optional[str] = None, port: Optional[int] = None
+    ) -> bool:
         """Enable web admin. Multiple calls won't start multiple servers."""
         if host is not None:
             self.web_host = host
@@ -180,7 +186,9 @@ class AsyncFasterCron(SchedulerMixin):
             return True
         return False
 
-    async def enableWeb(self, base_url: Optional[str] = None, port: Optional[int] = None) -> bool:
+    async def enableWeb(
+        self, base_url: Optional[str] = None, port: Optional[int] = None
+    ) -> bool:
         return await self.enable_web(host=base_url, port=port)
 
     async def disableWeb(self) -> bool:
@@ -190,11 +198,17 @@ class AsyncFasterCron(SchedulerMixin):
 
     def _refresh_active_tasks(self):
         self._worker_tasks = {task for task in self._worker_tasks if not task.done()}
-        self._one_shot_tasks = {task for task in self._one_shot_tasks if not task.done()}
+        self._one_shot_tasks = {
+            task for task in self._one_shot_tasks if not task.done()
+        }
         self._monitor_tasks = {
             name: task for name, task in self._monitor_tasks.items() if not task.done()
         }
-        self._active_tasks = set(self._monitor_tasks.values()) | self._worker_tasks | self._one_shot_tasks
+        self._active_tasks = (
+            set(self._monitor_tasks.values())
+            | self._worker_tasks
+            | self._one_shot_tasks
+        )
 
     def _start_monitor(self, task: Dict[str, Any]):
         if task.get("type") != "recurring":
@@ -204,7 +218,9 @@ class AsyncFasterCron(SchedulerMixin):
         if existing and not existing.done():
             return
 
-        monitor = asyncio.create_task(self._monitor(task), name=f"monitor:{task['name']}")
+        monitor = asyncio.create_task(
+            self._monitor(task), name=f"monitor:{task['name']}"
+        )
         self._monitor_tasks[task["name"]] = monitor
         self._refresh_active_tasks()
 
@@ -217,7 +233,9 @@ class AsyncFasterCron(SchedulerMixin):
         execution_type: str = "recurring",
     ) -> asyncio.Task:
         worker = asyncio.create_task(
-            self._execute_task(task, context, args=args, kwargs=kwargs, execution_type=execution_type),
+            self._execute_task(
+                task, context, args=args, kwargs=kwargs, execution_type=execution_type
+            ),
             name=f"worker:{task['name']}",
         )
         self._worker_tasks.add(worker)
@@ -245,7 +263,9 @@ class AsyncFasterCron(SchedulerMixin):
         try:
             while self._running:
                 self._refresh_active_tasks()
-                if not self._active_tasks and not any(t.get("type") == "recurring" for t in self.tasks):
+                if not self._active_tasks and not any(
+                    t.get("type") == "recurring" for t in self.tasks
+                ):
                     break
                 await asyncio.sleep(0.1)
         finally:
@@ -315,7 +335,11 @@ class AsyncFasterCron(SchedulerMixin):
 
                 last_trigger_ts = current_ts
 
-                if not task["allow_overlap"] and current_task and not current_task.done():
+                if (
+                    not task["allow_overlap"]
+                    and current_task
+                    and not current_task.done()
+                ):
                     self.logger.warning(f"Skip {task['name']}: overlapping blocked.")
                     continue
 
@@ -333,7 +357,9 @@ class AsyncFasterCron(SchedulerMixin):
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                self.logger.error(f"Error in monitor for {task['name']}: {exc}", exc_info=True)
+                self.logger.error(
+                    f"Error in monitor for {task['name']}: {exc}", exc_info=True
+                )
                 await asyncio.sleep(0.5)
 
     async def _call_func(
@@ -383,6 +409,7 @@ class AsyncFasterCron(SchedulerMixin):
 
                     execution_record.success = True
                     execution_record.finished_at = datetime.datetime.now()
+                    assert execution_record.started_at is not None
                     execution_record.duration_seconds = (
                         execution_record.finished_at - execution_record.started_at
                     ).total_seconds()
@@ -407,10 +434,13 @@ class AsyncFasterCron(SchedulerMixin):
                     if retry_count <= self.max_retries:
                         await asyncio.sleep(self.retry_delay)
                     else:
-                        self.logger.error(f"Max retries exceeded for task {func.__name__}")
+                        self.logger.error(
+                            f"Max retries exceeded for task {func.__name__}"
+                        )
 
             if not execution_record.success:
                 execution_record.finished_at = datetime.datetime.now()
+                assert execution_record.started_at is not None
                 execution_record.duration_seconds = (
                     execution_record.finished_at - execution_record.started_at
                 ).total_seconds()
@@ -423,13 +453,23 @@ class AsyncFasterCron(SchedulerMixin):
                         self.logger.error(f"Error callback failed: {callback_exc}")
 
             if task_info is not None:
-                task_info.state = TaskState.PENDING if execution_type == "recurring" else TaskState.COMPLETED
+                task_info.state = (
+                    TaskState.PENDING
+                    if execution_type == "recurring"
+                    else TaskState.COMPLETED
+                )
                 task_info.last_execution = execution_record.started_at
-                task_info.last_result = "success" if execution_record.success else execution_record.error_message
+                task_info.last_result = (
+                    "success"
+                    if execution_record.success
+                    else execution_record.error_message
+                )
 
             if execution_type != "recurring":
                 self.task_registry.pop(task_name, None)
-                self.tasks = [task_data for task_data in self.tasks if task_data is not task]
+                self.tasks = [
+                    task_data for task_data in self.tasks if task_data is not task
+                ]
         finally:
             self._refresh_active_tasks()
 
@@ -464,7 +504,9 @@ class AsyncFasterCron(SchedulerMixin):
         self.tasks.append(task_data)
         self.task_registry[func.__name__] = task_info
 
-        runtime_task = asyncio.create_task(self._execute_one_shot(task_data), name=f"one-shot:{func.__name__}")
+        runtime_task = asyncio.create_task(
+            self._execute_one_shot(task_data), name=f"one-shot:{func.__name__}"
+        )
         task_data["runtime_task"] = runtime_task
         self._one_shot_tasks.add(runtime_task)
         runtime_task.add_done_callback(lambda _: self._refresh_active_tasks())
@@ -474,7 +516,9 @@ class AsyncFasterCron(SchedulerMixin):
 
     async def _execute_one_shot(self, task: Dict[str, Any]):
         try:
-            delay_seconds = max(0.0, (task["target_time"] - datetime.datetime.now()).total_seconds())
+            delay_seconds = max(
+                0.0, (task["target_time"] - datetime.datetime.now()).total_seconds()
+            )
             if delay_seconds:
                 await asyncio.sleep(delay_seconds)
 
@@ -491,7 +535,9 @@ class AsyncFasterCron(SchedulerMixin):
             )
         except asyncio.CancelledError:
             self.task_registry.pop(task["name"], None)
-            self.tasks = [task_data for task_data in self.tasks if task_data is not task]
+            self.tasks = [
+                task_data for task_data in self.tasks if task_data is not task
+            ]
             raise
 
     async def _start_web_admin_server(self):

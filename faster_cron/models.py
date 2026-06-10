@@ -7,17 +7,18 @@ FasterCron v2.0 - 核心数据模型
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 
 
 class TaskState(Enum):
     """任务状态枚举"""
-    PENDING = "pending"       # 待调度
-    RUNNING = "running"       # 正在运行
-    PAUSED = "paused"         # 已暂停
-    DISABLED = "disabled"     # 已禁用（不调度但保留配置）
-    COMPLETED = "completed"   # 已完成
-    
+
+    PENDING = "pending"  # 待调度
+    RUNNING = "running"  # 正在运行
+    PAUSED = "paused"  # 已暂停
+    DISABLED = "disabled"  # 已禁用（不调度但保留配置）
+    COMPLETED = "completed"  # 已完成
+
     def __str__(self):
         return self.value
 
@@ -26,9 +27,10 @@ class TaskState(Enum):
 class TaskInfo:
     """
     任务信息对象
-    
+
     包含任务的完整元数据和运行时状态
     """
+
     name: str
     expression: str
     func: Callable[..., Any]
@@ -38,11 +40,11 @@ class TaskInfo:
     task_kwargs: Dict[str, Any] = field(default_factory=dict)
     func_module: Optional[str] = None
     func_qualname: Optional[str] = None
-    retry_count: int = 0        # 当前重试次数
-    last_execution: Optional[datetime] = None    # 上次执行时间
-    last_result: Optional[str] = None            # 上次执行结果
+    retry_count: int = 0  # 当前重试次数
+    last_execution: Optional[datetime] = None  # 上次执行时间
+    last_result: Optional[str] = None  # 上次执行结果
     created_at: datetime = field(default_factory=datetime.now)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
@@ -50,13 +52,16 @@ class TaskInfo:
             "expression": self.expression,
             "func_name": self.func.__name__,
             "func_module": self.func_module or getattr(self.func, "__module__", None),
-            "func_qualname": self.func_qualname or getattr(self.func, "__qualname__", self.func.__name__),
+            "func_qualname": self.func_qualname
+            or getattr(self.func, "__qualname__", self.func.__name__),
             "allow_overlap": self.allow_overlap,
             "state": str(self.state),
             "task_args": list(self.task_args),
             "task_kwargs": self.task_kwargs,
             "retry_count": self.retry_count,
-            "last_execution": self.last_execution.isoformat() if self.last_execution else None,
+            "last_execution": (
+                self.last_execution.isoformat() if self.last_execution else None
+            ),
             "last_result": self.last_result,
             "created_at": self.created_at.isoformat(),
         }
@@ -66,9 +71,10 @@ class TaskInfo:
 class ExecutionRecord:
     """
     单次执行记录
-    
+
     记录每次任务执行的详细信息
     """
+
     task_name: str
     scheduled_at: datetime
     started_at: Optional[datetime]
@@ -77,7 +83,7 @@ class ExecutionRecord:
     error_message: Optional[str] = None
     retry_count: int = 0
     duration_seconds: Optional[float] = None
-    
+
     @property
     def elapsed_ms(self) -> Optional[float]:
         """获取执行耗时（毫秒）"""
@@ -87,7 +93,7 @@ class ExecutionRecord:
             delta = self.finished_at - self.started_at
             return delta.total_seconds() * 1000
         return None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
@@ -107,9 +113,10 @@ class ExecutionRecord:
 class SchedulerStats:
     """
     调度器统计信息
-    
+
     用于监控和分析调度器运行情况
     """
+
     total_tasks: int = 0
     active_tasks: int = 0
     paused_tasks: int = 0
@@ -118,14 +125,14 @@ class SchedulerStats:
     successful_executions: int = 0
     failed_executions: int = 0
     error_history_size: int = 0
-    
+
     @property
     def success_rate(self) -> float:
         """获取成功率百分比"""
         if self.total_executions == 0:
             return 100.0
         return (self.successful_executions / self.total_executions) * 100
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {

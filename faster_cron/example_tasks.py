@@ -18,7 +18,9 @@ def clear_execution_log():
 
 
 def heartbeat(context: Dict):
-    _record(f"[heartbeat] {context['task_name']} at {context['scheduled_at'].isoformat()}")
+    _record(
+        f"[heartbeat] {context['task_name']} at {context['scheduled_at'].isoformat()}"
+    )
 
 
 def health_check(context: Dict):
@@ -35,5 +37,6 @@ def nightly_backup(context: Dict):
 
 async def async_ping(context: Dict):
     await asyncio.sleep(0)
-    _record(f"[async_ping] {context['task_name']} at {context['scheduled_at'].isoformat()}")
-
+    _record(
+        f"[async_ping] {context['task_name']} at {context['scheduled_at'].isoformat()}"
+    )

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
-from faster_cron.models import TaskState
-
 import pytest
+
+from faster_cron.models import TaskState
 
 
 @pytest.mark.asyncio
@@ -64,7 +64,9 @@ async def test_async_pause_resume_disable_enable(async_cron):
 
 
 @pytest.mark.asyncio
-async def test_async_context_injection_supports_positional_ctx_and_sync_callables(async_cron):
+async def test_async_context_injection_supports_positional_ctx_and_sync_callables(
+    async_cron,
+):
     received = {}
 
     async def positional_ctx(ctx):
@@ -85,7 +87,9 @@ async def test_async_context_injection_supports_positional_ctx_and_sync_callable
 
 
 @pytest.mark.asyncio
-async def test_async_context_injection_supports_named_context_with_extra_args(async_cron):
+async def test_async_context_injection_supports_named_context_with_extra_args(
+    async_cron,
+):
     received = {}
 
     async def with_args(context, message):
@@ -93,7 +97,9 @@ async def test_async_context_injection_supports_named_context_with_extra_args(as
 
     async_cron.add_task("* * * * * *", with_args, args=("hello",))
     context = {"scheduled_at": datetime.now(), "task_name": "manual"}
-    await async_cron._execute_task(async_cron.tasks[0], context, args=("hello",), kwargs={})
+    await async_cron._execute_task(
+        async_cron.tasks[0], context, args=("hello",), kwargs={}
+    )
 
     assert received["task"] == ("manual", "hello")
 
@@ -130,4 +136,3 @@ async def test_async_remove_task(async_cron):
 async def test_async_start_without_tasks_returns_cleanly(async_cron):
     assert await async_cron.start() is None
     assert async_cron._running is False
-

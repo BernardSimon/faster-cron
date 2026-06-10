@@ -116,7 +116,11 @@ class FasterCron(SchedulerMixin):
 
         with self._lock:
             task_data = next(
-                (task for task in self.tasks if task.get("name") == task_name and task.get("type") == "recurring"),
+                (
+                    task
+                    for task in self.tasks
+                    if task.get("name") == task_name and task.get("type") == "recurring"
+                ),
                 None,
             )
             if task_data is None:
@@ -161,7 +165,9 @@ class FasterCron(SchedulerMixin):
 
     # ── 引擎生命周期 ─────────────────────────────────────────
 
-    def enable_web(self, host: Optional[str] = None, port: Optional[int] = None) -> bool:
+    def enable_web(
+        self, host: Optional[str] = None, port: Optional[int] = None
+    ) -> bool:
         """Enable web admin. Multiple calls won't start multiple servers."""
         if host is not None:
             self.web_host = host
@@ -184,7 +190,9 @@ class FasterCron(SchedulerMixin):
             return True
         return False
 
-    def enableWeb(self, base_url: Optional[str] = None, port: Optional[int] = None) -> bool:
+    def enableWeb(
+        self, base_url: Optional[str] = None, port: Optional[int] = None
+    ) -> bool:
         return self.enable_web(host=base_url, port=port)
 
     def disableWeb(self, wait_timeout: Optional[float] = None) -> bool:
@@ -264,7 +272,9 @@ class FasterCron(SchedulerMixin):
         if self.wait_on_exit or wait_timeout is not None:
             for thread_set in (self._timers, self._workers):
                 for thread in list(thread_set):
-                    timeout = None if deadline is None else max(0.0, deadline - time.time())
+                    timeout = (
+                        None if deadline is None else max(0.0, deadline - time.time())
+                    )
                     thread.join(timeout=timeout)
                     if not thread.is_alive():
                         thread_set.discard(thread)
@@ -323,7 +333,9 @@ class FasterCron(SchedulerMixin):
                 worker.start()
 
             except Exception as exc:
-                self.logger.error(f"Error in monitor loop for {task['name']}: {exc}", exc_info=True)
+                self.logger.error(
+                    f"Error in monitor loop for {task['name']}: {exc}", exc_info=True
+                )
                 if self._stop_event.wait(timeout=0.5):
                     break
 
@@ -374,6 +386,7 @@ class FasterCron(SchedulerMixin):
 
                     execution_record.success = True
                     execution_record.finished_at = datetime.datetime.now()
+                    assert execution_record.started_at is not None
                     execution_record.duration_seconds = (
                         execution_record.finished_at - execution_record.started_at
                     ).total_seconds()
@@ -399,10 +412,13 @@ class FasterCron(SchedulerMixin):
                         if self._stop_event.wait(self.retry_delay):
                             break
                     else:
-                        self.logger.error(f"Max retries exceeded for task {func.__name__}")
+                        self.logger.error(
+                            f"Max retries exceeded for task {func.__name__}"
+                        )
 
             if not execution_record.success:
                 execution_record.finished_at = datetime.datetime.now()
+                assert execution_record.started_at is not None
                 execution_record.duration_seconds = (
                     execution_record.finished_at - execution_record.started_at
                 ).total_seconds()
@@ -415,14 +431,24 @@ class FasterCron(SchedulerMixin):
                         self.logger.error(f"Error callback failed: {callback_exc}")
 
             if task_info is not None:
-                task_info.state = TaskState.PENDING if execution_type == "recurring" else TaskState.COMPLETED
+                task_info.state = (
+                    TaskState.PENDING
+                    if execution_type == "recurring"
+                    else TaskState.COMPLETED
+                )
                 task_info.last_execution = execution_record.started_at
-                task_info.last_result = "success" if execution_record.success else execution_record.error_message
+                task_info.last_result = (
+                    "success"
+                    if execution_record.success
+                    else execution_record.error_message
+                )
 
             if execution_type != "recurring":
                 self.task_registry.pop(task_name, None)
                 with self._lock:
-                    self.tasks = [task_data for task_data in self.tasks if task_data is not task]
+                    self.tasks = [
+                        task_data for task_data in self.tasks if task_data is not task
+                    ]
         finally:
             self._workers.discard(current_thread)
 
@@ -479,10 +505,16 @@ class FasterCron(SchedulerMixin):
                 if task["cancel_event"].is_set() or self._stop_event.is_set():
                     self.task_registry.pop(task["name"], None)
                     with self._lock:
-                        self.tasks = [task_data for task_data in self.tasks if task_data is not task]
+                        self.tasks = [
+                            task_data
+                            for task_data in self.tasks
+                            if task_data is not task
+                        ]
                     return
 
-                remaining = (task["target_time"] - datetime.datetime.now()).total_seconds()
+                remaining = (
+                    task["target_time"] - datetime.datetime.now()
+                ).total_seconds()
                 if remaining <= 0:
                     break
                 task["cancel_event"].wait(timeout=min(remaining, 0.2))

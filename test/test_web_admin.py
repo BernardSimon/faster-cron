@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 import importlib
 import logging
+from datetime import datetime
 
 import pytest
 
@@ -76,7 +76,9 @@ def test_web_admin_crud_and_history_for_sync_scheduler():
 
 def test_web_admin_constructor_options_are_available():
     sync_cron = FasterCron(enable_web_ui=True, web_host="0.0.0.0", web_port=8010)
-    async_cron = AsyncFasterCron(enable_web_ui=True, web_host="127.0.0.1", web_port=8011)
+    async_cron = AsyncFasterCron(
+        enable_web_ui=True, web_host="127.0.0.1", web_port=8011
+    )
 
     assert sync_cron.enable_web_ui is True
     assert sync_cron.web_host == "0.0.0.0"
@@ -95,7 +97,7 @@ def test_web_admin_index_contains_inline_editor_form():
     index = client.get("/")
     assert index.status_code == 200
     html = index.text
-    assert "id=\"edit-task-name\"" in html
+    assert 'id="edit-task-name"' in html
     assert "submitTaskEdit()" in html
 
 
@@ -166,5 +168,3 @@ async def test_async_enable_disable_web_is_idempotent(monkeypatch):
     assert stops["count"] == 1
     assert await cron.disable_web() is False
     assert await cron.disableWeb() is False
-
-

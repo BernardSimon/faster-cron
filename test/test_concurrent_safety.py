@@ -106,6 +106,7 @@ def test_execution_history_is_thread_safe():
         def make_task(idx=i):
             def task():
                 concurrent_task()
+
             task.__name__ = f"task_{idx}"
             return task
 

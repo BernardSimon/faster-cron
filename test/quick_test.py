@@ -31,7 +31,9 @@ def sync_smoke():
     def tick(ctx):
         seen.append(ctx["task_name"])
 
-    thread = threading.Thread(target=cron.run, kwargs={"wait_on_exit": False}, daemon=True)
+    thread = threading.Thread(
+        target=cron.run, kwargs={"wait_on_exit": False}, daemon=True
+    )
     thread.start()
     time.sleep(1.2)
     cron.stop(wait_timeout=2)
@@ -43,4 +45,3 @@ if __name__ == "__main__":
     sync_smoke()
     asyncio.run(async_smoke())
     print("quick smoke test passed")
-

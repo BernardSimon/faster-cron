@@ -7,7 +7,6 @@ from datetime import datetime
 from faster_cron.models import TaskState
 
 
-
 def test_sync_public_lifecycle_and_dynamic_tasks(sync_cron):
     executions: list[str] = []
 
@@ -15,7 +14,9 @@ def test_sync_public_lifecycle_and_dynamic_tasks(sync_cron):
     def first_task(ctx):
         executions.append(ctx["task_name"])
 
-    runner = threading.Thread(target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True)
+    runner = threading.Thread(
+        target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True
+    )
     runner.start()
 
     time.sleep(1.2)
@@ -33,7 +34,6 @@ def test_sync_public_lifecycle_and_dynamic_tasks(sync_cron):
     assert hasattr(sync_cron, "run")
 
 
-
 def test_sync_pause_resume_disable_enable(sync_cron):
     counter = {"value": 0}
 
@@ -41,7 +41,9 @@ def test_sync_pause_resume_disable_enable(sync_cron):
     def counted(ctx):
         counter["value"] += 1
 
-    runner = threading.Thread(target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True)
+    runner = threading.Thread(
+        target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True
+    )
     runner.start()
 
     time.sleep(1.2)
@@ -66,7 +68,6 @@ def test_sync_pause_resume_disable_enable(sync_cron):
 
     sync_cron.stop(wait_timeout=1)
     runner.join(timeout=1)
-
 
 
 def test_sync_context_injection_supports_context_name_and_positional_ctx(sync_cron):
@@ -104,7 +105,6 @@ def test_sync_context_injection_supports_named_context_with_extra_args(sync_cron
     assert received["task"] == ("manual", "hello")
 
 
-
 def test_sync_non_overlap_blocks_parallel_runs(sync_cron):
     starts: list[float] = []
     finished = threading.Event()
@@ -115,7 +115,9 @@ def test_sync_non_overlap_blocks_parallel_runs(sync_cron):
         time.sleep(1.3)
         finished.set()
 
-    runner = threading.Thread(target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True)
+    runner = threading.Thread(
+        target=sync_cron.run, kwargs={"wait_on_exit": False}, daemon=True
+    )
     runner.start()
 
     time.sleep(2.4)
@@ -126,7 +128,6 @@ def test_sync_non_overlap_blocks_parallel_runs(sync_cron):
     assert finished.is_set()
 
 
-
 def test_sync_remove_task(sync_cron):
     @sync_cron.schedule("* * * * * *")
     def task_to_remove(ctx):
@@ -135,4 +136,3 @@ def test_sync_remove_task(sync_cron):
     assert sync_cron.remove_task("task_to_remove") is True
     assert sync_cron.get_task("task_to_remove") is None
     assert sync_cron.remove_task("task_to_remove") is False
-

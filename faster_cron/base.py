@@ -27,7 +27,10 @@ class CronBase:
         parts = expression.split()
         if len(parts) == 5:
             # 分 时 日 月 周 -> 补齐秒为 0
-            sec_part, min_part, hour_part, day_part, month_part, weekday_part = "0", *parts
+            sec_part, min_part, hour_part, day_part, month_part, weekday_part = (
+                "0",
+                *parts,
+            )
         elif len(parts) == 6:
             sec_part, min_part, hour_part, day_part, month_part, weekday_part = parts
         else:
@@ -49,20 +52,20 @@ class CronBase:
 
             # 3. 处理 Day 和 Weekday 的特殊关系 (Standard Cron Logic)
             # 如果两个字段都有限制（不是 *），则为 OR 关系；否则为 AND 关系。
-            day_is_star = (day_part == "*")
-            weekday_is_star = (weekday_part == "*")
+            day_is_star = day_part == "*"
+            weekday_is_star = weekday_part == "*"
 
             if not day_is_star and not weekday_is_star:
-                day_weekday_ok = (day_matches or weekday_matches)
+                day_weekday_ok = day_matches or weekday_matches
             else:
-                day_weekday_ok = (day_matches and weekday_matches)
+                day_weekday_ok = day_matches and weekday_matches
 
             return (
-                    sec_match and
-                    min_match and
-                    hour_match and
-                    month_match and
-                    day_weekday_ok
+                sec_match
+                and min_match
+                and hour_match
+                and month_match
+                and day_weekday_ok
             )
         except Exception:
             # 如果表达式解析失败（如格式错误），返回 False 避免程序崩溃
@@ -176,11 +179,17 @@ class CronBase:
         day_values = CronBase._expand_field(day_f, 1, 31)
         month_values = CronBase._expand_field(month_f, 1, 12)
 
-        if not sec_values or not min_values or not hour_values or not day_values or not month_values:
+        if (
+            not sec_values
+            or not min_values
+            or not hour_values
+            or not day_values
+            or not month_values
+        ):
             raise ValueError(f"Invalid cron expression: {expression}")
 
-        day_is_star = (day_f == "*")
-        weekday_is_star = (weekday_f == "*")
+        day_is_star = day_f == "*"
+        weekday_is_star = weekday_f == "*"
 
         import bisect
 
@@ -196,13 +205,19 @@ class CronBase:
                     candidate = candidate.replace(
                         year=candidate.year + 1,
                         month=month_values[0],
-                        day=1, hour=0, minute=0, second=0,
+                        day=1,
+                        hour=0,
+                        minute=0,
+                        second=0,
                     )
                     continue
                 else:
                     candidate = candidate.replace(
                         month=month_values[idx],
-                        day=1, hour=0, minute=0, second=0,
+                        day=1,
+                        hour=0,
+                        minute=0,
+                        second=0,
                     )
                     continue
 
@@ -218,7 +233,9 @@ class CronBase:
 
             if not day_match:
                 # 尝试下一天
-                candidate = candidate.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+                candidate = candidate.replace(hour=0, minute=0, second=0) + timedelta(
+                    days=1
+                )
                 # 检查是否跨月
                 if candidate.day == 1:
                     continue  # 重新从月开始检查
@@ -228,17 +245,23 @@ class CronBase:
             if candidate.hour not in hour_values:
                 idx = bisect.bisect_left(hour_values, candidate.hour)
                 if idx >= len(hour_values):
-                    candidate = candidate.replace(hour=0, minute=0, second=0) + timedelta(days=1)
+                    candidate = candidate.replace(
+                        hour=0, minute=0, second=0
+                    ) + timedelta(days=1)
                     continue
                 else:
-                    candidate = candidate.replace(hour=hour_values[idx], minute=0, second=0)
+                    candidate = candidate.replace(
+                        hour=hour_values[idx], minute=0, second=0
+                    )
                     continue
 
             # 分：跳到下一个有效分钟
             if candidate.minute not in min_values:
                 idx = bisect.bisect_left(min_values, candidate.minute)
                 if idx >= len(min_values):
-                    candidate = candidate.replace(minute=0, second=0) + timedelta(hours=1)
+                    candidate = candidate.replace(minute=0, second=0) + timedelta(
+                        hours=1
+                    )
                     continue
                 else:
                     candidate = candidate.replace(minute=min_values[idx], second=0)
@@ -257,7 +280,9 @@ class CronBase:
             # 所有字段都匹配
             return candidate
 
-        raise ValueError(f"No trigger time found within 1 year for expression: {expression}")
+        raise ValueError(
+            f"No trigger time found within 1 year for expression: {expression}"
+        )
 
 
 class SchedulerMixin:
@@ -317,10 +342,13 @@ class SchedulerMixin:
 
         # 使用 deque 提升性能（Phase 3 优化在此生效）
         from collections import deque
+
         self.execution_history: Any = deque(maxlen=1000)
         self.error_history: Any = deque(maxlen=100)
 
-        self._setup_logger(log_level, log_format, log_file, custom_logger, logger_prefix)
+        self._setup_logger(
+            log_level, log_format, log_file, custom_logger, logger_prefix
+        )
 
     def _setup_logger(
         self,
@@ -486,14 +514,18 @@ class SchedulerMixin:
             kwargs = task_config.get("kwargs", {})
 
             if not module_name or not function_name or not expression:
-                self.logger.error(f"Invalid task config, missing required fields: {task_config}")
+                self.logger.error(
+                    f"Invalid task config, missing required fields: {task_config}"
+                )
                 continue
 
             try:
                 module = importlib.import_module(module_name)
                 func = getattr(module, function_name)
             except (ImportError, AttributeError) as exc:
-                self.logger.error(f"Failed to import {module_name}.{function_name}: {exc}")
+                self.logger.error(
+                    f"Failed to import {module_name}.{function_name}: {exc}"
+                )
                 continue
 
             self.add_task(
@@ -527,14 +559,18 @@ class SchedulerMixin:
             positional = [
                 parameter
                 for parameter in parameters
-                if parameter.kind in (
+                if parameter.kind
+                in (
                     inspect.Parameter.POSITIONAL_ONLY,
                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 )
             ]
             if (
                 context_param.kind
-                in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                )
                 and positional
                 and positional[0].name == "context"
                 and "context" not in call_kwargs
@@ -542,13 +578,16 @@ class SchedulerMixin:
                 args_list.insert(0, context)
             else:
                 call_kwargs.setdefault("context", context)
-        elif any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters):
+        elif any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
+        ):
             call_kwargs.setdefault("context", context)
         elif not args_list:
             positional = [
                 parameter
                 for parameter in parameters
-                if parameter.kind in (
+                if parameter.kind
+                in (
                     inspect.Parameter.POSITIONAL_ONLY,
                     inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 )
